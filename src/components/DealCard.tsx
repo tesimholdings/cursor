@@ -17,7 +17,18 @@ export function DealCard({ deal }: { deal: Deal }) {
             {deal.industry} · {deal.location}
           </div>
         </div>
-        {deal.screening && <ScoreRing score={deal.diligence?.scores.total || deal.packet?.score || deal.screening.preNdaScore} size={56} />}
+        {(deal.screening || deal.ownerQuestions) && (
+          <ScoreRing
+            score={
+              deal.diligence?.scores.total ||
+              deal.packet?.score ||
+              deal.screening?.preNdaScore ||
+              deal.ownerQuestions?.score ||
+              0
+            }
+            size={56}
+          />
+        )}
       </div>
       <dl className="mt-4 grid grid-cols-2 gap-2 text-sm">
         <div>

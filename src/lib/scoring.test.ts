@@ -4,6 +4,7 @@ import { computeFinancing, pmt } from "./finance";
 import { parseMoney } from "./format";
 import { roleForQuestion } from "./assign";
 import { buildStage1 } from "./screening";
+import { buildOwnerQuestions } from "./owner-questions";
 import type { Deal } from "./types";
 
 describe("scoring", () => {
@@ -106,9 +107,40 @@ describe("screening honesty", () => {
       assignedQuestions: [],
       fatalRisks: [],
     } as Deal;
+    deal.ownerQuestions = buildOwnerQuestions(deal);
     const s = buildStage1(deal);
     const cap = s.questions.find((q) => q.id === 13);
     expect(cap?.answer).toMatch(/KEY DUE DILIGENCE QUESTION/);
     expect(s.prospects.length).toBeGreaterThanOrEqual(20);
+  });
+
+  it("requires and completes all 40 Owner Questions before Step 1B", () => {
+    const deal = {
+      id: "owner",
+      batchId: "b",
+      name: "Owner Test Molding",
+      industry: "Injection molding",
+      location: "Toledo, OH",
+      askingPrice: 7_000_000,
+      revenue: 4_000_000,
+      sde: 1_000_000,
+      employees: 25,
+      realEstateIncluded: true,
+      sellerFinancing: true,
+      status: "imported",
+      researchStatus: "pending",
+      createdAt: "",
+      updatedAt: "",
+      documents: [],
+      assignedQuestions: [],
+      fatalRisks: [],
+    } as Deal;
+
+    expect(() => buildStage1(deal)).toThrow(/STEP 1A/);
+    deal.ownerQuestions = buildOwnerQuestions(deal);
+    expect(deal.ownerQuestions.questions).toHaveLength(40);
+    expect(deal.ownerQuestions.prospects).toHaveLength(30);
+    expect(deal.ownerQuestions.sections).toHaveLength(7);
+    expect(buildStage1(deal).preNdaScore).toBeGreaterThan(0);
   });
 });

@@ -106,7 +106,7 @@ export default function RankingPage() {
         <table className="w-full min-w-[900px] text-left text-sm">
           <thead className="border-b border-[var(--line)] text-xs uppercase tracking-wide text-[var(--muted)]">
             <tr>
-              {["Rank", "Company", "Industry", "Ask", "Revenue", "SDE/EBITDA", "Multiple", "Industry quality", "Growth", "Assets", "Pre-NDA", "Decision"].map(
+              {["Rank", "Company", "Industry", "Ask", "Revenue", "SDE/EBITDA", "Multiple", "Industry quality", "Growth", "Assets", "Owner 1A", "Pre-NDA 1B", "Decision"].map(
                 (h) => (
                   <th key={h} className="px-3 py-3 font-medium">
                     {h}
@@ -136,6 +136,9 @@ export default function RankingPage() {
                   <td className="px-3 py-3">{d.screening?.industryQuality ?? "—"}</td>
                   <td className="px-3 py-3">{d.screening?.growthScore ?? "—"}</td>
                   <td className="px-3 py-3">{d.screening?.assetsScore ?? "—"}</td>
+                  <td className="px-3 py-3 font-semibold">
+                    {d.ownerQuestions?.score ?? "—"}
+                  </td>
                   <td className="px-3 py-3 font-semibold">{d.screening?.preNdaScore ?? "—"}</td>
                   <td className="px-3 py-3 text-xs">{d.screening?.decision?.replace("_", " ") || "Pending"}</td>
                 </tr>

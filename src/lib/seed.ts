@@ -3,6 +3,7 @@ import { defaultTeams } from "./teams";
 import { buildStage1 } from "./screening";
 import { analyzePacket, applyPacketAssignments } from "./packet";
 import { attachModels, runDiligence } from "./diligence";
+import { buildOwnerQuestions } from "./owner-questions";
 
 function deal(
   partial: Partial<Deal> & Pick<Deal, "id" | "name" | "industry" | "location">
@@ -166,6 +167,7 @@ export function seedStore(): Store {
   ];
 
   for (const d of rows) {
+    d.ownerQuestions = buildOwnerQuestions(d);
     d.screening = buildStage1(d);
     d.researchStatus = "complete";
     d.status = d.screening.decision === "PASS" ? "passed" : "screened";

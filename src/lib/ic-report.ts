@@ -3,17 +3,18 @@ import { money, pct } from "./format";
 
 export function investmentCommitteeHtml(deal: Deal) {
   const s = deal.screening;
+  const o = deal.ownerQuestions;
   const p = deal.packet;
   const d = deal.diligence;
   const f = deal.financing?.result;
   const t = deal.tax;
   const rec = d?.finalDecision || s?.decision || "CONTINUE";
   const sections: [string, string][] = [
-    ["1. Executive Summary", `${deal.name} is a ${deal.industry} business in ${deal.location}. Asking ${money(deal.askingPrice)}. Pre-NDA score ${s?.preNdaScore ?? "—"}. Packet score ${p?.score ?? "—"}. Final score ${d?.scores.total ?? "—"}. Recommendation: ${rec}.`],
-    ["2. What the Business Does", s?.questions.find((q) => q.id === 1)?.answer || "NOT PROVIDED"],
-    ["3. Industry Need", s?.questions.find((q) => q.id === 2)?.answer || "NOT PROVIDED"],
-    ["4. Market Size & Growth", s?.questions.find((q) => q.id === 3)?.answer || "NOT PROVIDED"],
-    ["5. Competition", s?.questions.find((q) => q.id === 4)?.answer || "NOT PROVIDED"],
+    ["1. Executive Summary", `${deal.name} is a ${deal.industry} business in ${deal.location}. Asking ${money(deal.askingPrice)}. Owner score ${o?.score ?? "—"}. Step 1B Pre-NDA score ${s?.preNdaScore ?? "—"}. Packet score ${p?.score ?? "—"}. Final score ${d?.scores.total ?? "—"}. Recommendation: ${rec}.`],
+    ["2. What the Business Does", o?.questions.find((q) => q.id === 1)?.answer || s?.questions.find((q) => q.id === 1)?.answer || "NOT PROVIDED"],
+    ["3. Industry Need", o?.questions.find((q) => q.id === 2)?.answer || s?.questions.find((q) => q.id === 2)?.answer || "NOT PROVIDED"],
+    ["4. Market Size & Growth", o?.questions.find((q) => q.id === 3)?.answer || s?.questions.find((q) => q.id === 3)?.answer || "NOT PROVIDED"],
+    ["5. Competition", o?.questions.find((q) => q.id === 4)?.answer || s?.questions.find((q) => q.id === 4)?.answer || "NOT PROVIDED"],
     ["6. ICP", s?.icp || "NOT PROVIDED"],
     ["7. Customer Growth Opportunity", s?.questions.find((q) => q.id === 7)?.answer || "NOT PROVIDED"],
     ["8. Financial Analysis", `Ask ${money(deal.askingPrice)}. Revenue ${money(deal.revenue)}. SDE ${money(deal.sde)}. EBITDA ${money(deal.ebitda)}.`],

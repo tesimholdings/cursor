@@ -87,6 +87,67 @@ export interface Prospect {
   whyFit: string;
   potentialOffering: string;
   fit: "High" | "Medium" | "Low";
+  barrier?: string;
+}
+
+export type OwnerQuestionSection =
+  | "business"
+  | "customers"
+  | "growth"
+  | "capacity_assets"
+  | "people_risk"
+  | "industry_valuation"
+  | "decision";
+
+export type OwnerDecision =
+  | "HIGH_PRIORITY_REQUEST_NDA"
+  | "REQUEST_NDA"
+  | "MAYBE"
+  | "PASS";
+
+export interface ResearchSource {
+  title: string;
+  url?: string;
+  accessedAt: string;
+  kind: "LISTING" | "COMPANY_WEBSITE" | "PUBLIC_SOURCE" | "INDUSTRY_SOURCE" | "SELLER_MATERIAL";
+}
+
+export interface OwnerQuestion {
+  id: number;
+  section: OwnerQuestionSection;
+  title: string;
+  answer: string;
+  result?: string;
+  light: TrafficLight;
+  kind: EvidenceKind;
+  known: string[];
+  unknown: string[];
+  why: string;
+  next: string;
+  details?: string;
+  sources: ResearchSource[];
+}
+
+export interface OwnerQuestionSectionResult {
+  id: OwnerQuestionSection;
+  title: string;
+  questionIds: number[];
+  light: TrafficLight;
+  summary: string;
+}
+
+export interface OwnerQuestionReport {
+  completedAt: string;
+  status: "complete";
+  questions: OwnerQuestion[];
+  sections: OwnerQuestionSectionResult[];
+  prospects: Prospect[];
+  whatWeLike: string[];
+  concerns: string[];
+  unanswered: string[];
+  score: number;
+  decision: OwnerDecision;
+  decisionWhy: string;
 }
 
 export interface EquipmentItem {
@@ -308,6 +369,7 @@ export interface Deal {
   createdAt: string;
   updatedAt: string;
   teamId?: string;
+  ownerQuestions?: OwnerQuestionReport;
   screening?: Stage1Screening;
   packet?: PacketReview;
   diligence?: DiligencePack;

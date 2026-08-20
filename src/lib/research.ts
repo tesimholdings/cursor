@@ -1,20 +1,41 @@
 import { updateStore } from "./store";
 import { buildStage1 } from "./screening";
 import { enrichScreening } from "./ai";
+import { buildOwnerQuestions } from "./owner-questions";
+
+const ADVANCED = new Set([
+  "nda_requested",
+  "waiting_packet",
+  "packet_review",
+  "diligence",
+  "loi",
+  "financing",
+  "closing",
+  "acquired",
+]);
 
 export async function researchNext(limit = 3) {
   return updateStore(async (store) => {
-    const next = store.deals.filter((d) => d.researchStatus === "pending").slice(0, limit);
+    const next = store.deals
+      .filter((d) => d.researchStatus === "pending" || !d.ownerQuestions)
+      .slice(0, limit);
     for (const deal of next) {
+      const priorStatus = deal.status;
       deal.researchStatus = "running";
-      deal.status = "screening";
+      if (!ADVANCED.has(priorStatus)) deal.status = "screening";
       deal.updatedAt = new Date().toISOString();
       try {
+        // Mandatory ordering: Step 1A is persisted before Step 1B is created.
+        deal.ownerQuestions = buildOwnerQuestions(deal);
         let screening = buildStage1(deal);
         screening = await enrichScreening(deal, screening);
         deal.screening = screening;
         deal.researchStatus = "complete";
-        deal.status = screening.decision === "PASS" ? "passed" : "screened";
+        if (!ADVANCED.has(priorStatus)) {
+          deal.status = screening.decision === "PASS" ? "passed" : "screened";
+        } else {
+          deal.status = priorStatus;
+        }
       } catch (err) {
         deal.researchStatus = "error";
         deal.researchError = err instanceof Error ? err.message : "Research failed";
@@ -30,14 +51,20 @@ export async function researchDeal(id: string) {
   return updateStore(async (store) => {
     const deal = store.deals.find((d) => d.id === id);
     if (!deal) throw new Error("Deal not found");
-    if (deal.researchStatus === "complete" && deal.screening) return deal;
+    if (deal.researchStatus === "complete" && deal.ownerQuestions && deal.screening) return deal;
+    const priorStatus = deal.status;
     deal.researchStatus = "running";
-    deal.status = "screening";
+    if (!ADVANCED.has(priorStatus)) deal.status = "screening";
+    deal.ownerQuestions = buildOwnerQuestions(deal);
     let screening = buildStage1(deal);
     screening = await enrichScreening(deal, screening);
     deal.screening = screening;
     deal.researchStatus = "complete";
-    deal.status = screening.decision === "PASS" ? "passed" : "screened";
+    deal.status = ADVANCED.has(priorStatus)
+      ? priorStatus
+      : screening.decision === "PASS"
+        ? "passed"
+        : "screened";
     deal.updatedAt = new Date().toISOString();
     return deal;
   });

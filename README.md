@@ -5,14 +5,19 @@ A simple full-stack workspace for buying lower-middle-market businesses (typical
 The product is a funnel, not a 400-field spreadsheet:
 
 1. **Upload a list** (CSV / Excel)
-2. **Stage 1** — Should we request an NDA?
-3. **Stage 2** — Is the information packet good enough for an LOI?
-4. **Stage 3** — Diligence, financing, tax sketch, downside cases
-5. **Buy, continue, renegotiate, or pass**
+2. **Step 1A — Owner Questions** — the investor's 40 mandatory questions run first
+3. **Step 1B** — normal listing/public-financial screen
+4. **Stage 2** — Is the information packet good enough for an LOI?
+5. **Stage 3** — Diligence, financing, tax sketch, downside cases
+6. **Buy, continue, renegotiate, or pass**
 
 Every screen answers four things: what we know, what we don’t, why it matters, and what to do next.
 
 Facts are labeled **Verified**, **Seller provided**, **Estimate**, **AI calculation**, **Assumption**, **Not provided**, **Conflict**, or **External research**. The app will not invent capacity or pick a number when listing and packet disagree.
+
+Step 1B is guarded in code: it cannot run until Step 1A has persisted all 40
+Owner Questions. The UI groups them into seven small expandable sections rather
+than dumping 40 answers onto one screen.
 
 ## Run locally
 

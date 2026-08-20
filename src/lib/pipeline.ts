@@ -42,9 +42,18 @@ export function stageCopy(deal: Deal): {
   if (deal.status === "passed") {
     return { stageLabel: "Passed — we are not buying this one", needToDo: "Nothing. Keep the file for memory." };
   }
+  if (!deal.ownerQuestions) {
+    return {
+      stageLabel: "Step 1A — Owner Questions",
+      needToDo:
+        deal.researchStatus === "running"
+          ? "Nothing yet. The Command Center is answering the Owner Questions first."
+          : "Run the mandatory Owner Questions before the normal Pre-NDA screen.",
+    };
+  }
   if (deal.researchStatus === "pending" || deal.researchStatus === "running" || deal.status === "imported" || deal.status === "screening") {
     return {
-      stageLabel: "Stage 1 of 3 — Deciding whether to request an NDA",
+      stageLabel: "Step 1B — Normal listing / public financial screen",
       needToDo:
         deal.researchStatus === "running"
           ? "Nothing yet. AI is researching the company."
@@ -54,20 +63,20 @@ export function stageCopy(deal: Deal): {
   if (deal.status === "screened") {
     if (deal.screening?.decision === "REQUEST_NDA") {
       return {
-        stageLabel: "Stage 1 of 3 — Deciding whether to request an NDA",
+        stageLabel: "Step 1B — First NDA decision",
         needToDo: "Review the one-page summary, then request the NDA or pass.",
         nextButton: { label: "Request NDA", action: "nda" },
       };
     }
     if (deal.screening?.decision === "MAYBE") {
       return {
-        stageLabel: "Stage 1 of 3 — Need one or two answers first",
+        stageLabel: "Step 1B — Need one or two answers first",
         needToDo: "Get the missing fact (usually earnings or a plain-English description), then decide.",
         nextButton: { label: "Request NDA anyway", action: "nda" },
       };
     }
     return {
-      stageLabel: "Stage 1 of 3 — Recommendation is PASS",
+      stageLabel: "Step 1B — Recommendation is PASS",
       needToDo: "Confirm pass so we do not keep seeing this card.",
       nextButton: { label: "Pass", action: "pass" },
     };
@@ -119,8 +128,12 @@ export function stageCopy(deal: Deal): {
 
 export function researchProgress(store: Store) {
   const total = store.deals.length;
-  const done = store.deals.filter((d) => d.researchStatus === "complete").length;
+  const done = store.deals.filter(
+    (d) => d.researchStatus === "complete" && d.ownerQuestions?.status === "complete"
+  ).length;
   const running = store.deals.filter((d) => d.researchStatus === "running").length;
-  const pending = store.deals.filter((d) => d.researchStatus === "pending").length;
+  const pending = store.deals.filter(
+    (d) => d.researchStatus === "pending" || !d.ownerQuestions
+  ).length;
   return { total, done, running, pending };
 }

@@ -7,6 +7,7 @@ import { stageCopy } from "@/lib/pipeline";
 import { EvidenceBadge, TrafficDot } from "@/components/EvidenceBadge";
 import { ScoreRing } from "@/components/ScoreRing";
 import { resolveAssigneeName } from "@/lib/assign";
+import { OwnerQuestionsPanel } from "@/components/OwnerQuestionsPanel";
 
 export function DealClient({ id }: { id: string }) {
   const [deal, setDeal] = useState<Deal | null>(null);
@@ -55,6 +56,7 @@ export function DealClient({ id }: { id: string }) {
   if (!deal) return <p className="text-[var(--muted)]">Opening the deal file…</p>;
 
   const guide = stageCopy(deal);
+  const o = deal.ownerQuestions;
   const s = deal.screening;
   const p = deal.packet;
   const d = deal.diligence;
@@ -83,7 +85,11 @@ export function DealClient({ id }: { id: string }) {
           </p>
         </div>
         <div className="flex items-center gap-4">
-          {s && <ScoreRing score={d?.scores.total || p?.score || s.preNdaScore} />}
+          {(s || o) && (
+            <ScoreRing
+              score={d?.scores.total || p?.score || s?.preNdaScore || o?.score || 0}
+            />
+          )}
         </div>
       </div>
 
@@ -94,9 +100,23 @@ export function DealClient({ id }: { id: string }) {
           <div className="mt-4 kicker">What do I need to do?</div>
           <p className="mt-1 text-lg">{guide.needToDo}</p>
           <div className="mt-4 kicker">What did we find?</div>
-          <p className="mt-1">{s?.whatWeKnow || "Not screened yet."}</p>
+          <p className="mt-1">
+            {s?.whatWeKnow ||
+              (o
+                ? `${o.questions.length} Owner Questions processed. Owner score ${o.score}/100.`
+                : "Not screened yet.")}
+          </p>
           <div className="mt-4 kicker">What should we do?</div>
-          <p className="mt-1">{s?.whatNext || d?.whatNext || "Start screening."}</p>
+          <p className="mt-1">
+            {s?.whatNext ||
+              (o
+                ? o.decision.includes("REQUEST_NDA")
+                  ? "Review Step 1B, then request the NDA."
+                  : o.decision === "MAYBE"
+                    ? "Get the basic unanswered Owner Questions first."
+                    : "Pass."
+                : d?.whatNext || "Start screening.")}
+          </p>
           <div className="mt-5 flex flex-wrap gap-2">
             {deal.researchStatus !== "complete" && (
               <button className="btn btn-primary" onClick={research}>
@@ -131,12 +151,17 @@ export function DealClient({ id }: { id: string }) {
         <section className="card rounded-2xl p-5 space-y-3">
           <div className="kicker">The answer</div>
           <p className="serif text-2xl">
-            {(d?.finalDecision || p?.decision || s?.decision || "NOT SCREENED").toString().replace(/_/g, " ")}
+            {(d?.finalDecision || p?.decision || s?.decision || o?.decision || "NOT SCREENED").toString().replace(/_/g, " ")}
           </p>
-          <p className="text-sm">{p?.decisionWhy || s?.decisionWhy || d?.whatNext}</p>
+          <p className="text-sm">
+            {p?.decisionWhy || s?.decisionWhy || o?.decisionWhy || d?.whatNext}
+          </p>
           <div>
             <div className="kicker">Why</div>
-            <p className="text-sm text-[var(--muted)]">{s?.whyItMatters}</p>
+            <p className="text-sm text-[var(--muted)]">
+              {s?.whyItMatters ||
+                "Owner Questions come before technical diligence because they decide whether this business deserves any more time."}
+            </p>
           </div>
           <label className="block text-sm">
             Acquisition team
@@ -163,15 +188,31 @@ export function DealClient({ id }: { id: string }) {
       </div>
 
       <FourBox
-        know={d?.whatWeKnow || p?.whatWeKnow || s?.whatWeKnow || "Listing only."}
-        dont={d?.whatWeDont || p?.whatWeDont || s?.whatWeDont || "Almost everything that matters for a close."}
+        know={
+          d?.whatWeKnow ||
+          p?.whatWeKnow ||
+          s?.whatWeKnow ||
+          (o ? o.whatWeLike.join(" ") : "Listing only.")
+        }
+        dont={
+          d?.whatWeDont ||
+          p?.whatWeDont ||
+          s?.whatWeDont ||
+          (o
+            ? o.unanswered.join(" ")
+            : "Almost everything that matters for a close.")
+        }
         why={d?.whyItMatters || p?.whyItMatters || s?.whyItMatters || "We only need the next decision."}
         next={d?.whatNext || p?.whatNext || s?.whatNext || "Screen it."}
       />
 
+      {o && <OwnerQuestionsPanel report={o} />}
+
       {s && (
         <details open className="card rounded-2xl p-5">
-          <summary className="serif cursor-pointer text-2xl">Stage 1 — Pre-NDA questions</summary>
+          <summary className="serif cursor-pointer text-2xl">
+            Step 1B — Normal listing / public financial screen
+          </summary>
           <p className="mt-2 text-sm text-[var(--muted)]">
             Score {s.preNdaScore}/100 · {s.researchMode === "ai_enriched" ? "AI-enriched" : "Listing + industry knowledge"} ·
             Valuation {s.valuationLabel} · Tax attractiveness {s.taxAttractiveness}

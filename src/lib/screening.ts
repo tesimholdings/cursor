@@ -19,6 +19,9 @@ function q(
 }
 
 export function buildStage1(deal: Deal): Stage1Screening {
+  if (!deal.ownerQuestions || deal.ownerQuestions.status !== "complete") {
+    throw new Error("STEP 1A — Owner Questions must complete before Step 1B.");
+  }
   const ind = matchIndustry(deal.industry, deal.name, deal.notes);
   const earnings = deal.sde || deal.ebitda;
   const revMult = multiple(deal.askingPrice, deal.revenue);
@@ -369,6 +372,18 @@ export function buildStage1(deal: Deal): Stage1Screening {
     decision = "PASS";
     decisionWhy =
       "The category is not something we clearly want to own for 10 years, and the listing is not cheap enough (or complete enough) to justify a look.";
+  }
+  if (deal.ownerQuestions.decision === "PASS") {
+    decision = "PASS";
+    decisionWhy =
+      "Step 1A identified a pass. The normal listing screen cannot override the owner's core questions.";
+  } else if (
+    deal.ownerQuestions.decision === "MAYBE" &&
+    decision === "REQUEST_NDA"
+  ) {
+    decision = "MAYBE";
+    decisionWhy =
+      "The listing math is acceptable, but Step 1A still needs basic owner, customer, or capacity answers.";
   }
 
   const prospects = ind.typicalProspects.map((p) => ({ ...p }));
