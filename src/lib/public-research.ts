@@ -118,9 +118,11 @@ async function searchTavily(
 ): Promise<TavilyResult[]> {
   const response = await fetch(TAVILY_ENDPOINT, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
     body: JSON.stringify({
-      api_key: apiKey,
       query,
       search_depth: "advanced",
       max_results: 5,

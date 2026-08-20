@@ -374,9 +374,17 @@ export function matchIndustry(industry: string, name = "", notes = ""): Industry
   if (/(mold|plastic|injection|resin)/.test(blob)) return PROFILES[0];
   if (/(cnc|machine shop|machining|tool & die|tool and die|precision)/.test(blob)) return PROFILES[1];
   if (/(hvac|mechanical contractor|heating|air condition)/.test(blob)) return PROFILES[2];
-  if (/(express car wash|carwash|car wash|conveyor wash|tunnel wash)/.test(blob))
+  if (
+    /(express car wash|carwash|car wash|car washing|conveyor wash|tunnel wash)/.test(
+      blob
+    )
+  )
     return PROFILES[4];
-  if (/(gas station|c-store|cstore|convenience store|fuel retail)/.test(blob))
+  if (
+    /(gas station|service station|c-store|cstore|convenience store|convenience retail|fuel retail)/.test(
+      blob
+    )
+  )
     return PROFILES[5];
   if (/(powder coat|coating|finishing)/.test(blob)) {
     return { ...PROFILES[1], key: "coat", label: "Industrial coatings / finishing", needed: "Manufacturers need durable finishes on metal parts. This is a production service, not a luxury." };

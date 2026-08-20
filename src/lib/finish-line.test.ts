@@ -10,6 +10,7 @@ import { runDiligence } from "./diligence";
 import { computeTax } from "./finance";
 import { analyzePacket } from "./packet";
 import { parseSpreadsheet } from "./parse-spreadsheet";
+import { matchIndustry } from "./industry";
 import type {
   Deal,
   DocumentRecord,
@@ -150,6 +151,21 @@ describe("research citation safety", () => {
     ).toEqual([research.sources[0]]);
     expect(isSafeCitationUrl("http://127.0.0.1/private")).toBe(false);
     expect(isSafeCitationUrl("javascript:alert(1)")).toBe(false);
+  });
+});
+
+describe("TESIM live-lane coverage", () => {
+  it.each([
+    ["plastic injection molding", "mold"],
+    ["express car wash", "carwash"],
+    ["gas station and convenience store", "cstore"],
+    ["equipment rental asset-heavy operator", "assetop"],
+  ])("maps %s to a conservative profile", (industry, expectedKey) => {
+    const profile = matchIndustry(industry);
+    expect(profile.key).toBe(expectedKey);
+    if (expectedKey !== "mold") {
+      expect(profile.usMarketSize.value).toMatch(/NOT AVAILABLE/);
+    }
   });
 });
 
