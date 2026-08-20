@@ -11,6 +11,7 @@ import { computeTax } from "./finance";
 import { analyzePacket } from "./packet";
 import { parseSpreadsheet } from "./parse-spreadsheet";
 import { matchIndustry } from "./industry";
+import { numericClaimsSupported } from "./ai";
 import type {
   Deal,
   DocumentRecord,
@@ -151,6 +152,23 @@ describe("research citation safety", () => {
     ).toEqual([research.sources[0]]);
     expect(isSafeCitationUrl("http://127.0.0.1/private")).toBe(false);
     expect(isSafeCitationUrl("javascript:alert(1)")).toBe(false);
+    expect(isSafeCitationUrl("http://[::ffff:127.0.0.1]/secret")).toBe(false);
+    expect(isSafeCitationUrl("http://100.64.0.1/metadata")).toBe(false);
+  });
+
+  it("rejects model numeric claims absent from cited text", () => {
+    expect(
+      numericClaimsSupported(
+        "Market size is $8.2 billion and CAGR is 6%",
+        "The cited source says market size is $8.2 billion."
+      )
+    ).toBe(false);
+    expect(
+      numericClaimsSupported(
+        "Market size is $8.2 billion",
+        "The cited source says market size is $8.2 billion."
+      )
+    ).toBe(true);
   });
 });
 
@@ -195,6 +213,32 @@ describe("TESIM/AIS IC rules", () => {
     expect(result.fatalRisks.join(" ")).toMatch(/73.*no extracted customer contract/i);
     expect(result.finalDecision).toBe("PASS");
     expect(result.maxPrice.value).toBeNull();
+  });
+
+  it("never misreads a GL account/amount table as customer concentration", async () => {
+    const bytes = await workbookBuffer("GL", [
+      ["Account", "Amount"],
+      ["Inventory", 625_000],
+      ["Payroll", 375_000],
+    ]);
+    const deal = baseDeal();
+    deal.documents.push({
+      id: "gl_doc",
+      dealId: deal.id,
+      name: "general-ledger.xlsx",
+      category: "financials",
+      stage: 3,
+      uploadedAt: new Date().toISOString(),
+      size: bytes.byteLength,
+      extraction: await extractDocument(
+        "general-ledger.xlsx",
+        Buffer.from(bytes)
+      ),
+    });
+    const result = runDiligence(deal);
+    expect(result.customers).toHaveLength(0);
+    expect(result.concentrationFlag).toBe("UNKNOWN");
+    expect(result.fatalRisks.join(" ")).not.toMatch(/customer/i);
   });
 });
 

@@ -1,6 +1,6 @@
-import { isIP } from "node:net";
 import { lookup } from "node:dns/promises";
 import * as cheerio from "cheerio";
+import ipaddr from "ipaddr.js";
 import type { Deal, PublicResearch, ResearchSource } from "./types";
 
 const TAVILY_ENDPOINT = "https://api.tavily.com/search";
@@ -202,7 +202,8 @@ export function isSafeCitationUrl(value: string): boolean {
     ) {
       return false;
     }
-    if (isIP(url.hostname) && isPrivateIp(url.hostname)) return false;
+    if (ipaddr.isValid(stripAddressBrackets(url.hostname)) && isPrivateIp(url.hostname))
+      return false;
     return true;
   } catch {
     return false;
@@ -210,30 +211,22 @@ export function isSafeCitationUrl(value: string): boolean {
 }
 
 function isPrivateIp(address: string): boolean {
-  const normalized = address.toLowerCase();
-  if (
-    normalized === "::1" ||
-    normalized === "0.0.0.0" ||
-    normalized.startsWith("fe80:") ||
-    normalized.startsWith("fc") ||
-    normalized.startsWith("fd")
-  ) {
+  try {
+    let parsed = ipaddr.parse(stripAddressBrackets(address));
+    if (
+      parsed.kind() === "ipv6" &&
+      (parsed as ipaddr.IPv6).isIPv4MappedAddress()
+    ) {
+      parsed = (parsed as ipaddr.IPv6).toIPv4Address();
+    }
+    return parsed.range() !== "unicast";
+  } catch {
     return true;
   }
-  const match = normalized.match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/);
-  if (!match) return false;
-  const [, aRaw, bRaw] = match;
-  const a = Number(aRaw);
-  const b = Number(bRaw);
-  return (
-    a === 0 ||
-    a === 10 ||
-    a === 127 ||
-    (a === 169 && b === 254) ||
-    (a === 172 && b >= 16 && b <= 31) ||
-    (a === 192 && b === 168) ||
-    a >= 224
-  );
+}
+
+function stripAddressBrackets(address: string) {
+  return address.replace(/^\[|\]$/g, "").split("%")[0];
 }
 
 export function validatedResearchSources(

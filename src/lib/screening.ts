@@ -23,6 +23,7 @@ export function buildStage1(deal: Deal): Stage1Screening {
     throw new Error("STEP 1A — Owner Questions must complete before Step 1B.");
   }
   const ind = matchIndustry(deal.industry, deal.name, deal.notes);
+  const citedProspects = deal.ownerQuestions.prospects;
   const earnings = deal.sde || deal.ebitda;
   const revMult = multiple(deal.askingPrice, deal.revenue);
   const earnMult = multiple(deal.askingPrice, earnings);
@@ -124,16 +125,18 @@ export function buildStage1(deal: Deal): Stage1Screening {
     q(
       7,
       "Who could become new customers?",
-      ind.typicalProspects.length
-        ? "Below is an initial prospect set based on typical buyers in this industry. These are NOT confirmed customers of this company. They are ideas for outreach after we own it."
-        : "NOT PROVIDED — we cannot name real prospects until the industry and capabilities are clearer. Fabricating a fake customer list would be worse than leaving this blank.",
+      citedProspects.length
+        ? `${citedProspects.length} potential companies were found in cited Step 1A research. They are prospects only, not confirmed customers or confirmed fits.`
+        : "NOT PROVIDED — cited public research did not identify defensible named prospects. Fabricating a customer list would be worse than leaving this blank.",
       "Growth has to attach to real buyers, not a TAM slide.",
       [],
       ["Whether this shop can actually serve those buyers (certs, size, equipment)"],
       "After NDA, compare equipment and certs to this list before promising growth.",
-      ind.typicalProspects.length ? "green" : "yellow",
-      "ESTIMATE",
-      ind.typicalProspects.map((p) => `${p.company} — ${p.fit} fit — ${p.whyFit}`).join("\n")
+      citedProspects.length ? "green" : "yellow",
+      citedProspects.length ? "EXTERNAL_RESEARCH" : "NOT_PROVIDED",
+      citedProspects
+        .map((p) => `${p.company} — ${p.fit} fit — ${p.whyFit}`)
+        .join("\n")
     ),
     q(
       8,
@@ -386,25 +389,12 @@ export function buildStage1(deal: Deal): Stage1Screening {
       "The listing math is acceptable, but Step 1A still needs basic owner, customer, or capacity answers.";
   }
 
-  const prospects = ind.typicalProspects.map((p) => ({ ...p }));
-  while (prospects.length > 0 && prospects.length < 20) {
-    const i = prospects.length;
-    prospects.push({
-      company: `Illustrative ICP account #${i + 1} (not a confirmed customer)`,
-      industry: deal.industry || ind.label,
-      location: "U.S. — ESTIMATE",
-      whyFit: "Typical buyer profile in this industry; not researched as a named account yet",
-      potentialOffering: "Core product/service plus capacity overflow",
-      fit: i % 3 === 0 ? "High" : i % 3 === 1 ? "Medium" : "Low",
-    });
-  }
-
   return {
     researchedAt: new Date().toISOString(),
     researchMode: "listing_and_industry",
     questions,
     icp: ind.icp,
-    prospects: prospects.slice(0, 30),
+    prospects: citedProspects.slice(0, 30),
     valuationLabel: valuation,
     taxAttractiveness: tax,
     industryQuality: scored.industryQuality,

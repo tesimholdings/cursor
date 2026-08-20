@@ -14,16 +14,18 @@ export interface CustomerConcentrationAnalysis {
 export function analyzeCustomerConcentration(
   deal: Deal
 ): CustomerConcentrationAnalysis {
-  const candidates = deal.documents.flatMap((document) =>
-    (document.extraction?.tables || []).map((table) => ({ document, table }))
-  );
+  const candidates = deal.documents
+    .filter((document) => document.category === "customers")
+    .flatMap((document) =>
+      (document.extraction?.tables || []).map((table) => ({ document, table }))
+    );
 
   for (const { document, table } of candidates) {
     const customerHeader = table.headers.find((header) =>
-      /customer|client|account|company/i.test(header)
+      /customer|client/i.test(header)
     );
     const revenueHeader = table.headers.find((header) =>
-      /revenue|sales|amount|ttm|total/i.test(header)
+      /revenue|sales/i.test(header)
     );
     const shareHeader = table.headers.find((header) =>
       /share|percent|%|concentration/i.test(header)

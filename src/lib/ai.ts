@@ -124,6 +124,17 @@ ${questionPacket}`,
         research
       );
       if (!citedSources.length) continue;
+      const citedText = citedSources
+        .map((source) => `${source.title} ${source.excerpt || ""}`)
+        .join(" ");
+      if (
+        !numericClaimsSupported(
+          `${update.answer} ${update.result || ""} ${update.known.join(" ")}`,
+          citedText
+        )
+      ) {
+        continue;
+      }
       question.answer = update.answer;
       question.result = update.result || question.result;
       question.known = update.known;
@@ -147,16 +158,28 @@ ${questionPacket}`,
           .toLowerCase();
         return haystack.includes(prospect.company.toLowerCase());
       })
-      .map((prospect) => ({
-        company: prospect.company,
-        industry: prospect.industry,
-        revenue: prospect.revenue,
-        location: prospect.location,
-        whyFit: prospect.whyFit,
-        potentialOffering: prospect.potentialOffering,
-        fit: prospect.fit,
-        barrier: prospect.barrier,
-      }));
+      .map((prospect) => {
+        const citedText = research.sources
+          .filter((source) => prospect.sourceIds.includes(source.id))
+          .map((source) => `${source.title} ${source.excerpt || ""}`)
+          .join(" ");
+        return {
+          company: prospect.company,
+          industry: prospect.industry,
+          revenue: numericClaimsSupported(prospect.revenue, citedText)
+            ? prospect.revenue
+            : "NOT AVAILABLE — cited source did not support a revenue figure",
+          location: citedText
+            .toLowerCase()
+            .includes(prospect.location.toLowerCase())
+            ? prospect.location
+            : "NOT AVAILABLE — location not supported by cited excerpt",
+          whyFit: `INFERENCE — ${prospect.whyFit}`,
+          potentialOffering: `INFERENCE — ${prospect.potentialOffering}`,
+          fit: prospect.fit,
+          barrier: `INFERENCE — ${prospect.barrier}`,
+        };
+      });
     const prospectQuestion = base.questions.find((question) => question.id === 8);
     if (prospectQuestion && base.prospects.length) {
       prospectQuestion.answer = `${base.prospects.length} potential companies were identified in fetched public sources. They are prospects only, not confirmed customers or confirmed fits. Fewer than 30 means the evidence did not support more names.`;
@@ -188,4 +211,23 @@ ${questionPacket}`,
     }. Fetched sources remain available; no unsupported claims were added.`;
     return base;
   }
+}
+
+export function numericClaimsSupported(
+  claim: string,
+  citedText: string
+): boolean {
+  const claimTokens = numericTokens(claim);
+  if (!claimTokens.length) return true;
+  const evidenceTokens = new Set(numericTokens(citedText));
+  return claimTokens.every((token) => evidenceTokens.has(token));
+}
+
+function numericTokens(value: string): string[] {
+  return (
+    value
+      .toLowerCase()
+      .match(/\$?\d[\d,.]*(?:\s?(?:%|million|billion|thousand|m|b|k))?/g) ||
+    []
+  ).map((token) => token.replace(/[$,\s]/g, ""));
 }

@@ -143,7 +143,7 @@ describe("screening honesty", () => {
     const s = buildStage1(deal);
     const cap = s.questions.find((q) => q.id === 13);
     expect(cap?.answer).toMatch(/KEY DUE DILIGENCE QUESTION/);
-    expect(s.prospects.length).toBeGreaterThanOrEqual(20);
+    expect(s.prospects).toHaveLength(0);
   });
 
   it("requires and completes all 40 Owner Questions before Step 1B", () => {
