@@ -129,11 +129,14 @@ export function stageCopy(deal: Deal): {
 export function researchProgress(store: Store) {
   const total = store.deals.length;
   const done = store.deals.filter(
-    (d) => d.researchStatus === "complete" && d.ownerQuestions?.status === "complete"
+    (d) =>
+      d.researchStatus === "complete" &&
+      Boolean(d.publicResearch) &&
+      d.ownerQuestions?.status === "complete"
   ).length;
   const running = store.deals.filter((d) => d.researchStatus === "running").length;
   const pending = store.deals.filter(
-    (d) => d.researchStatus === "pending" || !d.ownerQuestions
+    (d) => d.researchStatus === "pending" || !d.publicResearch || !d.ownerQuestions
   ).length;
   return { total, done, running, pending };
 }

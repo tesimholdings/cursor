@@ -1,9 +1,22 @@
-import type { Deal, EvidencePoint, PacketReview, TrafficLight } from "./types";
+import type {
+  Deal,
+  DocumentEvidenceChunk,
+  DocumentRecord,
+  EvidencePoint,
+  PacketReview,
+  TrafficLight,
+} from "./types";
 import { money } from "./format";
 import { scorePacket } from "./scoring";
 import { autoAssign } from "./assign";
 
-function grabNumber(text: string, labels: string[]): number | null {
+interface LocatedNumber {
+  value: number;
+  document?: DocumentRecord;
+  chunk?: DocumentEvidenceChunk;
+}
+
+function parseNumber(text: string, labels: string[]): number | null {
   for (const label of labels) {
     const re = new RegExp(
       label + "[^\\d$]{0,20}\\$?\\s*([0-9][0-9,]*(?:\\.\\d+)?)\\s*(m|k|million)?",
@@ -21,15 +34,85 @@ function grabNumber(text: string, labels: string[]): number | null {
   return null;
 }
 
-export function analyzePacket(deal: Deal, combinedText: string): PacketReview {
-  const text = combinedText || "";
+function grabLocatedNumber(
+  documents: DocumentRecord[],
+  fallbackText: string,
+  labels: string[],
+  allowedCategories: DocumentRecord["category"][] = [
+    "cim",
+    "financials",
+    "tax",
+    "other",
+  ]
+): LocatedNumber | null {
+  for (const document of documents) {
+    if (!allowedCategories.includes(document.category)) continue;
+    if (document.extraction?.status === "complete") {
+      for (const chunk of document.extraction.chunks) {
+        const value = parseNumber(chunk.text, labels);
+        if (value != null) return { value, document, chunk };
+      }
+    }
+    if (document.textExcerpt) {
+      const value = parseNumber(document.textExcerpt, labels);
+      if (value != null) return { value, document };
+    }
+  }
+  const value = parseNumber(fallbackText, labels);
+  return value == null ? null : { value };
+}
+
+function locator(found: LocatedNumber | null): Partial<EvidencePoint> {
+  if (!found?.document) return {};
+  return {
+    source: found.document.name,
+    documentId: found.document.id,
+    page: found.chunk?.page,
+    sheet: found.chunk?.sheet,
+    cell: found.chunk?.cell,
+  };
+}
+
+export function analyzePacket(
+  deal: Deal,
+  combinedText = "",
+  documents: DocumentRecord[] = deal.documents
+): PacketReview {
+  const extractedText = documents
+    .flatMap((document) =>
+      document.extraction?.status === "complete"
+        ? document.extraction.chunks.map((chunk) => chunk.text)
+        : document.textExcerpt
+          ? [document.textExcerpt]
+          : []
+    )
+    .join("\n");
+  const text = `${combinedText}\n${extractedText}`.trim();
   const hasText = text.trim().length > 40;
   const listingRev = deal.revenue;
   const listingEarn = deal.sde || deal.ebitda;
-  const packetRev = grabNumber(text, ["revenue", "sales", "ttm"]);
-  const packetSde = grabNumber(text, ["sde", "seller discretionary", "owner benefit"]);
-  const packetEbitda = grabNumber(text, ["ebitda"]);
-  const addbacks = grabNumber(text, ["add-backs", "add backs", "addbacks"]);
+  const packetRevFound = grabLocatedNumber(documents, combinedText, [
+    "revenue",
+    "sales",
+    "ttm",
+  ]);
+  const packetSdeFound = grabLocatedNumber(documents, combinedText, [
+    "sde",
+    "seller discretionary",
+    "owner benefit",
+  ]);
+  const packetEbitdaFound = grabLocatedNumber(documents, combinedText, [
+    "ebitda",
+  ]);
+  const addbacksFound = grabLocatedNumber(documents, combinedText, [
+    "add-backs",
+    "add backs",
+    "addbacks",
+  ]);
+  const packetRev = packetRevFound?.value ?? null;
+  const packetSde = packetSdeFound?.value ?? null;
+  const packetEbitda = packetEbitdaFound?.value ?? null;
+  const addbacks = addbacksFound?.value ?? null;
 
   const conflict =
     listingRev != null &&
@@ -59,6 +142,7 @@ export function analyzePacket(deal: Deal, combinedText: string): PacketReview {
       listingValue: listingRev != null ? money(listingRev) : "NOT PROVIDED",
       packetValue: packetRev != null ? money(packetRev) : hasText ? "NOT PROVIDED in extracted text" : "Packet text not extracted",
       kind: conflict ? "CONFLICT" : packetRev ? "SELLER_PROVIDED" : "NOT_PROVIDED",
+      ...locator(packetRevFound),
       difference:
         conflict && listingRev && packetRev
           ? `CONFLICT — ${money(Math.abs(listingRev - packetRev))} difference`
@@ -69,12 +153,14 @@ export function analyzePacket(deal: Deal, combinedText: string): PacketReview {
       listingValue: deal.sde != null ? money(deal.sde) : "NOT PROVIDED",
       packetValue: packetSde != null ? money(packetSde) : "NOT PROVIDED",
       kind: packetSde ? "SELLER_PROVIDED" : "NOT_PROVIDED",
+      ...locator(packetSdeFound),
     },
     {
       label: "EBITDA",
       listingValue: deal.ebitda != null ? money(deal.ebitda) : "NOT PROVIDED",
       packetValue: packetEbitda != null ? money(packetEbitda) : "NOT PROVIDED",
       kind: packetEbitda ? "SELLER_PROVIDED" : "NOT_PROVIDED",
+      ...locator(packetEbitdaFound),
     },
   ];
 

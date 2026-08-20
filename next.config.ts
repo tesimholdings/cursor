@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  serverExternalPackages: ["xlsx"],
+  serverExternalPackages: ["exceljs", "pdfjs-dist", "cheerio"],
   experimental: {
     serverActions: {
       bodySizeLimit: "32mb",

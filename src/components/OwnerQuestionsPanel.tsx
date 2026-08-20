@@ -1,14 +1,16 @@
 "use client";
 
 import { useState } from "react";
-import type { OwnerQuestionReport } from "@/lib/types";
+import type { OwnerQuestionReport, PublicResearch } from "@/lib/types";
 import { EvidenceBadge, TrafficDot } from "./EvidenceBadge";
 import { ScoreRing } from "./ScoreRing";
 
 export function OwnerQuestionsPanel({
   report,
+  research,
 }: {
   report: OwnerQuestionReport;
+  research?: PublicResearch;
 }) {
   const [openSection, setOpenSection] = useState<string | null>("business");
   const [openQuestion, setOpenQuestion] = useState<number | null>(null);
@@ -34,6 +36,39 @@ export function OwnerQuestionsPanel({
             </div>
           </div>
         </div>
+      </div>
+
+      <div className="mt-5 rounded-xl bg-[var(--paper)] p-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h3 className="font-semibold">Public research brief</h3>
+          <span className="text-xs text-[var(--muted)]">
+            {research?.status === "complete"
+              ? `${research.sources.length} fetched source(s)`
+              : "Unanswered — research unavailable"}
+          </span>
+        </div>
+        <p className="mt-2 whitespace-pre-wrap text-sm">
+          {report.companyBrief ||
+            research?.reason ||
+            "NOT AVAILABLE — no public research result was persisted."}
+        </p>
+        {research?.sources.length ? (
+          <ol className="mt-3 list-decimal space-y-1 pl-5 text-xs text-[var(--muted)]">
+            {research.sources.map((source) => (
+              <li key={source.id}>
+                <a
+                  href={source.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="underline"
+                >
+                  {source.title}
+                </a>
+                {source.query ? ` — query: ${source.query}` : ""}
+              </li>
+            ))}
+          </ol>
+        ) : null}
       </div>
 
       <div className="mt-5 grid gap-3 md:grid-cols-3">
@@ -127,25 +162,32 @@ export function OwnerQuestionsPanel({
                         )}
                         <div>
                           <strong>Sources.</strong>
-                          <ul className="mt-1 list-disc pl-5 text-xs text-[var(--muted)]">
-                            {question.sources.map((source, index) => (
-                              <li key={`${source.title}-${index}`}>
-                                {source.url ? (
-                                  <a
-                                    href={source.url}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="underline"
-                                  >
-                                    {source.title}
-                                  </a>
-                                ) : (
-                                  source.title
-                                )}{" "}
-                                · {source.kind.replace(/_/g, " ")}
-                              </li>
-                            ))}
-                          </ul>
+                          {question.sources.length ? (
+                            <ul className="mt-1 list-disc pl-5 text-xs text-[var(--muted)]">
+                              {question.sources.map((source, index) => (
+                                <li key={`${source.id}-${index}`}>
+                                  {source.url ? (
+                                    <a
+                                      href={source.url}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="underline"
+                                    >
+                                      {source.title}
+                                    </a>
+                                  ) : (
+                                    source.title
+                                  )}{" "}
+                                  · {source.kind.replace(/_/g, " ")}
+                                </li>
+                              ))}
+                            </ul>
+                          ) : (
+                            <p className="text-xs text-[var(--muted)]">
+                              No public citation supports this answer; it remains
+                              an estimate or unanswered.
+                            </p>
+                          )}
                         </div>
                       </div>
                     )}

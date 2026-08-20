@@ -1,7 +1,8 @@
 import { updateStore } from "./store";
 import { buildStage1 } from "./screening";
-import { enrichScreening } from "./ai";
+import { enrichOwnerQuestions } from "./ai";
 import { buildOwnerQuestions } from "./owner-questions";
+import { researchCompany } from "./public-research";
 
 const ADVANCED = new Set([
   "nda_requested",
@@ -17,7 +18,12 @@ const ADVANCED = new Set([
 export async function researchNext(limit = 3) {
   return updateStore(async (store) => {
     const next = store.deals
-      .filter((d) => d.researchStatus === "pending" || !d.ownerQuestions)
+      .filter(
+        (d) =>
+          d.researchStatus === "pending" ||
+          !d.ownerQuestions ||
+          !d.publicResearch
+      )
       .slice(0, limit);
     for (const deal of next) {
       const priorStatus = deal.status;
@@ -26,9 +32,13 @@ export async function researchNext(limit = 3) {
       deal.updatedAt = new Date().toISOString();
       try {
         // Mandatory ordering: Step 1A is persisted before Step 1B is created.
-        deal.ownerQuestions = buildOwnerQuestions(deal);
-        let screening = buildStage1(deal);
-        screening = await enrichScreening(deal, screening);
+        deal.publicResearch = await researchCompany(deal);
+        deal.ownerQuestions = await enrichOwnerQuestions(
+          deal,
+          buildOwnerQuestions(deal),
+          deal.publicResearch
+        );
+        const screening = buildStage1(deal);
         deal.screening = screening;
         deal.researchStatus = "complete";
         if (!ADVANCED.has(priorStatus)) {
@@ -51,13 +61,23 @@ export async function researchDeal(id: string) {
   return updateStore(async (store) => {
     const deal = store.deals.find((d) => d.id === id);
     if (!deal) throw new Error("Deal not found");
-    if (deal.researchStatus === "complete" && deal.ownerQuestions && deal.screening) return deal;
+    if (
+      deal.researchStatus === "complete" &&
+      deal.publicResearch &&
+      deal.ownerQuestions &&
+      deal.screening
+    )
+      return deal;
     const priorStatus = deal.status;
     deal.researchStatus = "running";
     if (!ADVANCED.has(priorStatus)) deal.status = "screening";
-    deal.ownerQuestions = buildOwnerQuestions(deal);
-    let screening = buildStage1(deal);
-    screening = await enrichScreening(deal, screening);
+    deal.publicResearch = await researchCompany(deal);
+    deal.ownerQuestions = await enrichOwnerQuestions(
+      deal,
+      buildOwnerQuestions(deal),
+      deal.publicResearch
+    );
+    const screening = buildStage1(deal);
     deal.screening = screening;
     deal.researchStatus = "complete";
     deal.status = ADVANCED.has(priorStatus)

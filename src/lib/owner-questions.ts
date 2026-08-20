@@ -1,5 +1,6 @@
 import { matchIndustry } from "./industry";
 import { money, multiple, pct } from "./format";
+import { isSafeCitationUrl } from "./public-research";
 import type {
   Deal,
   EvidenceKind,
@@ -69,56 +70,6 @@ const TITLES = [
   "Should we even spend more time on this company?",
 ];
 
-const LARGE_COMPANIES: Record<string, string[]> = {
-  mold: [
-    "Berry Global", "Amcor", "AptarGroup", "Silgan Holdings", "Jabil", "Flex",
-    "Molex", "Röchling", "Teel Plastics", "MGS", "GW Plastics", "Mack Molding",
-    "Nicolet Plastics", "EVCO Plastics", "PTI Engineered Plastics", "Revere Plastics Systems",
-    "Plastikon", "Universal Plastics", "Rodon Group", "Kaysun",
-  ],
-  cnc: [
-    "Precision Castparts", "Howmet Aerospace", "Jabil", "Flex", "Sanmina",
-    "Parker Hannifin", "Triumph Group", "Barnes Group", "Cadrex", "CORE Industrial Partners",
-    "Precinmac", "Re:Build Manufacturing", "ARCH Global Precision", "NN Inc.",
-    "MW Components", "GKN Aerospace", "Senior plc", "Ducommun", "LISI Aerospace", "Fictiv",
-  ],
-  hvac: [
-    "EMCOR Group", "Comfort Systems USA", "ABM Industries", "Johnson Controls",
-    "Carrier", "Trane Technologies", "Lennox", "Daikin Applied", "Service Logic",
-    "PremiStar", "Modigent", "NearU", "Wrench Group", "Redwood Services",
-    "Sila Services", "Heartland Home Services", "TurnPoint Services", "Reedy Industries",
-    "Crete United", "Kelso Industries",
-  ],
-  generic: [],
-};
-
-const PROSPECT_NAMES: Record<string, string[]> = {
-  mold: [
-    "Whirlpool", "GE Appliances", "Electrolux", "Stanley Black & Decker", "Eaton",
-    "Parker Hannifin", "Honeywell", "Emerson", "Rockwell Automation", "Illinois Tool Works",
-    "Aptiv", "Lear", "Magna International", "Dana", "BorgWarner", "Gentex",
-    "Stryker", "Zimmer Biomet", "Medtronic", "Baxter", "Milwaukee Tool",
-    "Kohler", "Moen", "Delta Faucet", "Husqvarna", "Toro", "Briggs & Stratton",
-    "Generac", "Schneider Electric", "Siemens",
-  ],
-  cnc: [
-    "Parker Hannifin", "Eaton", "Emerson", "Flowserve", "Caterpillar", "Deere & Company",
-    "Cummins", "Danfoss", "Regal Rexnord", "Timken", "Rockwell Automation", "Honeywell",
-    "Collins Aerospace", "Safran", "Spirit AeroSystems", "Woodward", "Moog", "Crane Company",
-    "Stryker", "Zimmer Biomet", "GE HealthCare", "Baker Hughes", "Halliburton", "NOV",
-    "Graco", "Donaldson", "Generac", "Terex", "Oshkosh Corporation", "Ametek",
-  ],
-  hvac: [
-    "CBRE", "JLL", "Cushman & Wakefield", "Prologis", "Welltower", "Ventas",
-    "Brookfield Properties", "Simon Property Group", "Greystar", "AvalonBay Communities",
-    "Equity Residential", "Marriott International", "Hilton", "Hyatt", "HCA Healthcare",
-    "CommonSpirit Health", "Aramark", "Compass Group", "Amazon", "Walmart",
-    "Target", "Costco", "Kroger", "FedEx", "UPS", "Lineage", "Americold",
-    "Digital Realty", "Equinix", "Iron Mountain",
-  ],
-  generic: [],
-};
-
 function sectionFor(id: number): OwnerQuestionSection {
   return SECTION_META.find((s) => id >= s.from && id <= s.to)!.id;
 }
@@ -127,13 +78,15 @@ function listingSources(deal: Deal): ResearchSource[] {
   const now = new Date().toISOString();
   const sources: ResearchSource[] = [
     {
+      id: `listing_${deal.id}`,
       title: deal.source ? `Uploaded spreadsheet — ${deal.source}` : "Uploaded spreadsheet",
       kind: "LISTING",
       accessedAt: now,
     },
   ];
-  if (deal.listingUrl) {
+  if (deal.listingUrl && isSafeCitationUrl(deal.listingUrl)) {
     sources.push({
+      id: `listing_url_${deal.id}`,
       title: "Business listing supplied by owner",
       url: deal.listingUrl,
       kind: "LISTING",
@@ -159,6 +112,7 @@ function make(
     sources?: ResearchSource[];
   } = {}
 ): OwnerQuestion {
+  const kind = options.kind || "ESTIMATE";
   return {
     id,
     section: sectionFor(id),
@@ -166,13 +120,17 @@ function make(
     answer,
     result: options.result,
     light: options.light || "yellow",
-    kind: options.kind || "ESTIMATE",
+    kind,
     known: options.known || [],
     unknown: options.unknown || [],
     why: options.why || "This changes whether the opportunity deserves more time.",
     next: options.next || "NOT AVAILABLE YET — ASK SELLER",
     details: options.details,
-    sources: options.sources || listingSources(deal),
+    sources:
+      options.sources ??
+      (kind === "SELLER_PROVIDED" || kind === "AI_CALCULATION"
+        ? listingSources(deal)
+        : []),
   };
 }
 
@@ -190,27 +148,6 @@ function scenarioDetails(revenue?: number | null) {
     }
   }
   return lines.join("\n");
-}
-
-function prospectsFor(deal: Deal, key: string): Prospect[] {
-  const names = PROSPECT_NAMES[key] || [];
-  return names.map((company, index) => ({
-    company,
-    industry: key === "hvac" ? "Commercial property / facilities" : "Industrial OEM / manufacturer",
-    revenue: "$1B+ or large enterprise — verify current company-reported revenue",
-    location: "United States / multi-location",
-    whyFit:
-      key === "hvac"
-        ? "Operates facilities that require recurring mechanical service"
-        : "Likely buys outsourced components in the target's broad process category",
-    potentialOffering:
-      key === "hvac" ? "Service agreement, retrofit, repair, or controls" : "Second-source production or overflow work",
-    fit: index < 10 ? "High" : index < 22 ? "Medium" : "Low",
-    barrier:
-      key === "hvac"
-        ? "Local coverage, licensing, national-vendor approval, and response-time requirements"
-        : "Exact machine envelope, quality certification, supplier qualification, and capacity are unverified",
-  }));
 }
 
 function strongestLight(lights: TrafficLight[]): TrafficLight {
@@ -248,8 +185,10 @@ export function buildOwnerQuestions(deal: Deal): OwnerQuestionReport {
           : earnMultiple <= 5
             ? "FAIR"
             : "EXPENSIVE";
-  const prospects = prospectsFor(deal, ind.key);
-  const companyLeaders = LARGE_COMPANIES[ind.key] || [];
+  // Named prospects and comps must come from fetched, cited public research.
+  // Static memory lists are intentionally not used.
+  const prospects: Prospect[] = [];
+  const companyLeaders: string[] = [];
   const q: OwnerQuestion[] = [];
 
   q.push(
@@ -631,6 +570,12 @@ export function buildOwnerQuestions(deal: Deal): OwnerQuestionReport {
     score,
     decision,
     decisionWhy,
+    researchStatus: deal.publicResearch?.status,
+    companyBrief:
+      deal.publicResearch?.status === "complete"
+        ? `Public research collected ${deal.publicResearch.sources.length} source(s). See cited Owner Question answers for grounded findings.`
+        : deal.publicResearch?.reason ||
+          "Public web research is unavailable. Answers use uploaded data and labeled estimates only.",
   };
 }
 

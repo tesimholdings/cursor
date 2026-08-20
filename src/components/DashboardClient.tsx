@@ -23,6 +23,9 @@ export function DashboardClient() {
   }
 
   useEffect(() => {
+    // Data is loaded from the persisted server store; this effect is the
+    // external-system synchronization boundary.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     load();
     const t = setInterval(load, 4000);
     return () => clearInterval(t);

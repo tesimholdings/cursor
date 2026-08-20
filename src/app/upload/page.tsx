@@ -46,12 +46,12 @@ export default function UploadPage() {
             required
             name="file"
             type="file"
-            accept=".csv,.xlsx,.xls"
+            accept=".csv,.xlsx"
             className="mt-2 block w-full text-sm"
           />
         </label>
         <p className="text-sm text-[var(--muted)]">
-          Columns we look for: company name, listing URL, industry, location, asking price, revenue,
+          Columns we look for: company name, listing URL, company website, industry, location, asking price, revenue,
           EBITDA, SDE / cash flow, employees, real estate, FF&E, seller financing, notes, broker, source.
         </p>
         <button className="btn btn-primary" disabled={busy}>

@@ -194,6 +194,179 @@ const PROFILES: IndustryProfile[] = [
     typicalSalesCycle: "NOT PROVIDED",
     typicalProspects: [],
   },
+  {
+    key: "carwash",
+    label: "Express conveyor car wash",
+    needed:
+      "Drivers buy a fast exterior wash to remove dirt, salt, pollen, and road film; subscription members pay monthly for convenience and vehicle appearance.",
+    wantToOwn10Years: true,
+    discretionary: "mixed",
+    obsolescence:
+      "The service is locally delivered and cannot be imported. Demand is durable, but an individual site can be overbuilt.",
+    disruption:
+      "AI does not replace the wash. Better equipment, license-plate recognition, pricing software, and water-reclamation systems can improve operations.",
+    regulatory:
+      "Water discharge, reclaim systems, chemical handling, zoning, traffic access, and local permits are material.",
+    economicSensitivity:
+      "Single washes are discretionary; unlimited-wash memberships can improve recurrence but churn in recessions.",
+    usMarketSize: {
+      value: "NOT AVAILABLE WITHOUT CURRENT PUBLIC RESEARCH",
+      kind: "ESTIMATE",
+      note: "Use current International Carwash Association, Census, and sourced market research.",
+    },
+    cagr: {
+      value: "NOT AVAILABLE WITHOUT CURRENT PUBLIC RESEARCH",
+      kind: "ESTIMATE",
+      note: "Do not reuse an undated market CAGR.",
+    },
+    fragmentation:
+      "Historically fragmented with active regional and private-equity consolidation; local site density matters more than national TAM.",
+    competitorsNational:
+      "NOT AVAILABLE — fetch a current establishment/operator count.",
+    competitorsRegional:
+      "Map every tunnel, in-bay automatic, and self-serve site in the practical drive-time trade area.",
+    sameSizeCount:
+      "Private site-level revenue is generally not public; use traffic, memberships, wash counts, and local comps.",
+    largeCompetitors:
+      "Large multi-site express operators exist, but current scale must be verified from public sources.",
+    icp:
+      "Consumers and fleet accounts within a short drive-time radius, especially commuters who value speed and recurring unlimited-wash access.",
+    customerUniverse:
+      "Vehicles passing or living in the site's trade area — not all U.S. drivers.",
+    icpUniverse:
+      "Households, commuters, and fleets within the local drive-time trade area.",
+    highPriorityUniverse:
+      "Frequent local washers and nearby fleet operators; size requires traffic and demographic data.",
+    salesNorm:
+      "Membership conversion at the pay station, local digital marketing, fleet outreach, and retention are the core commercial motions.",
+    growthLevers: [
+      "Improve membership conversion and retention",
+      "Optimize pricing and package mix",
+      "Increase throughput without degrading wash quality",
+      "Add fleet accounts only where access and capacity support them",
+    ],
+    extraRevenue: [
+      "Unlimited-wash memberships",
+      "Fleet plans",
+      "Premium wash packages",
+      "Vending and mat-cleaning",
+      "Additional sites after unit economics are proven",
+    ],
+    onboarding:
+      "Drive-up or digital lead → package or membership selection → payment / plate enrollment → wash → recurring monthly billing for members.",
+    typicalSalesCycle:
+      "Immediate for retail consumers; days to weeks for small fleets.",
+    typicalProspects: [],
+  },
+  {
+    key: "cstore",
+    label: "Gas station / convenience store",
+    needed:
+      "Customers buy fuel, food, beverages, tobacco/nicotine products, lottery, and convenience items at accessible locations.",
+    wantToOwn10Years: true,
+    discretionary: "mixed",
+    obsolescence:
+      "Fuel mix will change over time, but strong convenience retail sites can adapt. Weak fuel-only sites face higher EV-transition risk.",
+    disruption:
+      "Payments, loyalty, delivery, and EV charging change the offer; they do not eliminate location-based convenience retail.",
+    regulatory:
+      "Underground storage tanks, fuel/environmental compliance, alcohol/tobacco licensing, food safety, lottery, zoning, and card security are critical.",
+    economicSensitivity:
+      "Fuel gallons can vary with travel and price; inside-store convenience demand is relatively resilient but margin mix changes.",
+    usMarketSize: {
+      value: "NOT AVAILABLE WITHOUT CURRENT PUBLIC RESEARCH",
+      kind: "ESTIMATE",
+      note: "Use current NACS and Census sources; separate fuel sales from inside sales.",
+    },
+    cagr: {
+      value: "NOT AVAILABLE WITHOUT CURRENT PUBLIC RESEARCH",
+      kind: "ESTIMATE",
+      note: "Separate gallons, fuel margin, inside sales, and foodservice.",
+    },
+    fragmentation:
+      "Large chains coexist with many independents; site quality, traffic, fuel contracts, and inside margin matter more than broad TAM.",
+    competitorsNational:
+      "NOT AVAILABLE — fetch the current NACS store count.",
+    competitorsRegional:
+      "Map branded and independent sites in the local traffic corridor.",
+    sameSizeCount:
+      "Private site economics are rarely public; benchmark gallons, inside sales, gross margin, labor, and rent/site value.",
+    largeCompetitors:
+      "National and regional chains are relevant, but current revenue and store counts require sourced data.",
+    icp:
+      "Local drivers, commuters, commercial fleets, and nearby residents choosing the site for access, speed, fuel, food, and convenience.",
+    customerUniverse:
+      "Traffic in the site's corridor, not the full U.S. consumer market.",
+    icpUniverse:
+      "Drivers and residents within the site's trade area plus contracted fleets.",
+    highPriorityUniverse:
+      "Frequent commuters, nearby employers/fleets, and customers responsive to loyalty and foodservice.",
+    salesNorm:
+      "Location and merchandising drive demand; loyalty, fuel pricing, foodservice, and fleet cards professionalize it.",
+    growthLevers: [
+      "Improve inside-store mix and gross margin",
+      "Add credible foodservice",
+      "Use loyalty/fleet programs",
+      "Optimize labor, hours, and fuel pricing",
+    ],
+    extraRevenue: [
+      "Prepared food",
+      "Fleet cards",
+      "Loyalty/subscription offers",
+      "ATM/lottery/package services",
+      "EV charging where power and dwell time support it",
+    ],
+    onboarding:
+      "Drive-by/local awareness → visit → fuel or store purchase → optional loyalty/fleet enrollment → repeat visits.",
+    typicalSalesCycle:
+      "Immediate for consumers; weeks to months for fleet relationships.",
+    typicalProspects: [],
+  },
+  {
+    key: "assetop",
+    label: "Equipment- or real-estate-heavy operator",
+    needed:
+      "The underlying service may be durable, but the exact customer need is NOT AVAILABLE until the industry and revenue model are identified.",
+    wantToOwn10Years: false,
+    discretionary: "mixed",
+    obsolescence:
+      "Asset ownership is not a moat by itself. Technology, location, maintenance, and replacement cycles must be evaluated.",
+    disruption:
+      "NOT AVAILABLE — depends on the operating service.",
+    regulatory:
+      "Real estate, environmental, zoning, safety, permits, and equipment compliance may be material.",
+    economicSensitivity:
+      "High fixed costs can magnify revenue declines.",
+    usMarketSize: {
+      value: "NOT AVAILABLE — define the operating industry first",
+      kind: "ESTIMATE",
+      note: "Do not use asset value as a proxy for market demand.",
+    },
+    cagr: {
+      value: "NOT AVAILABLE — define the operating industry first",
+      kind: "ESTIMATE",
+      note: "Run cited research once the business category is known.",
+    },
+    fragmentation: "NOT AVAILABLE — depends on the operating industry.",
+    competitorsNational: "NOT AVAILABLE",
+    competitorsRegional: "NOT AVAILABLE",
+    sameSizeCount: "NOT AVAILABLE",
+    largeCompetitors: "NOT AVAILABLE",
+    icp: "NOT AVAILABLE — identify who pays and why.",
+    customerUniverse: "NOT AVAILABLE",
+    icpUniverse: "NOT AVAILABLE",
+    highPriorityUniverse: "NOT AVAILABLE",
+    salesNorm: "NOT AVAILABLE",
+    growthLevers: [
+      "Verify demand before adding assets",
+      "Measure utilization without assuming it",
+      "Separate maintenance capex from growth capex",
+    ],
+    extraRevenue: [],
+    onboarding: "NOT AVAILABLE",
+    typicalSalesCycle: "NOT AVAILABLE",
+    typicalProspects: [],
+  },
 ];
 
 export function matchIndustry(industry: string, name = "", notes = ""): IndustryProfile {
@@ -201,6 +374,10 @@ export function matchIndustry(industry: string, name = "", notes = ""): Industry
   if (/(mold|plastic|injection|resin)/.test(blob)) return PROFILES[0];
   if (/(cnc|machine shop|machining|tool & die|tool and die|precision)/.test(blob)) return PROFILES[1];
   if (/(hvac|mechanical contractor|heating|air condition)/.test(blob)) return PROFILES[2];
+  if (/(express car wash|carwash|car wash|conveyor wash|tunnel wash)/.test(blob))
+    return PROFILES[4];
+  if (/(gas station|c-store|cstore|convenience store|fuel retail)/.test(blob))
+    return PROFILES[5];
   if (/(powder coat|coating|finishing)/.test(blob)) {
     return { ...PROFILES[1], key: "coat", label: "Industrial coatings / finishing", needed: "Manufacturers need durable finishes on metal parts. This is a production service, not a luxury." };
   }
@@ -214,6 +391,13 @@ export function matchIndustry(industry: string, name = "", notes = ""): Industry
       discretionary: "discretionary",
       obsolescence: "Traditional neon and generic sign shops face long-term demand risk.",
     };
+  }
+  if (
+    /(equipment rental|self storage|warehouse operator|real estate heavy|asset heavy)/.test(
+      blob
+    )
+  ) {
+    return PROFILES[6];
   }
   return { ...PROFILES[3], label: industry || PROFILES[3].label };
 }

@@ -23,6 +23,8 @@ export function DealClient({ id }: { id: string }) {
   }
 
   useEffect(() => {
+    // Load the selected deal from the persisted server store.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
@@ -206,7 +208,9 @@ export function DealClient({ id }: { id: string }) {
         next={d?.whatNext || p?.whatNext || s?.whatNext || "Screen it."}
       />
 
-      {o && <OwnerQuestionsPanel report={o} />}
+      {o && (
+        <OwnerQuestionsPanel report={o} research={deal.publicResearch} />
+      )}
 
       {s && (
         <details open className="card rounded-2xl p-5">
@@ -274,6 +278,19 @@ export function DealClient({ id }: { id: string }) {
           />
           <button className="btn btn-primary">Run second filter</button>
         </form>
+        {deal.documents.filter((doc) => doc.stage === 2).length > 0 && (
+          <ul className="mt-4 space-y-1 text-xs text-[var(--muted)]">
+            {deal.documents
+              .filter((doc) => doc.stage === 2)
+              .map((doc) => (
+                <li key={doc.id}>
+                  {doc.name} — extraction{" "}
+                  {doc.extraction?.status || (doc.textExcerpt ? "complete" : "not run")}
+                  {doc.extraction?.error ? `: ${doc.extraction.error}` : ""}
+                </li>
+              ))}
+          </ul>
+        )}
         {p && (
           <div className="mt-6 space-y-4">
             <p className="serif text-xl">
@@ -288,6 +305,14 @@ export function DealClient({ id }: { id: string }) {
                 </div>
                 <div>Listing: {ev.listingValue}</div>
                 <div>Packet: {ev.packetValue}</div>
+                {(ev.source || ev.page || ev.sheet || ev.cell) && (
+                  <div className="text-xs text-[var(--muted)]">
+                    Evidence: {ev.source}
+                    {ev.page ? ` · page ${ev.page}` : ""}
+                    {ev.sheet ? ` · sheet ${ev.sheet}` : ""}
+                    {ev.cell ? ` · cell ${ev.cell}` : ""}
+                  </div>
+                )}
                 {ev.difference && <div className="font-semibold text-[var(--red)]">{ev.difference}</div>}
               </div>
             ))}
@@ -348,7 +373,7 @@ export function DealClient({ id }: { id: string }) {
                 ["Operations", d.scores.operations, 15],
                 ["Growth", d.scores.growth, 15],
                 ["Assets / downside", d.scores.assets, 10],
-                ["Financing", d.scores.financing, 10],
+                ["Deal structure", d.scores.dealStructure, 10],
                 ["Tax efficiency", d.scores.tax, 10],
                 ["Legal / environmental", d.scores.legal, 5],
               ] as const).map(([l, v, m]) => (
@@ -360,6 +385,60 @@ export function DealClient({ id }: { id: string }) {
                 </div>
               ))}
             </div>
+            <div className="rounded-xl bg-[var(--paper)] p-4 text-sm">
+              <h3 className="font-semibold">Why this call</h3>
+              <ul className="mt-2 list-disc pl-5">
+                {d.recommendationWhy.map((reason) => (
+                  <li key={reason}>{reason}</li>
+                ))}
+              </ul>
+              <p className="mt-3">
+                <strong>Maximum price:</strong>{" "}
+                {d.maxPrice.value == null
+                  ? "UNANSWERED"
+                  : money(d.maxPrice.value)}
+                {" — "}
+                {d.maxPrice.basis}
+              </p>
+            </div>
+            {[
+              ["Preferred structure", d.preferredStructure],
+              ["Seller protections", d.sellerProtections],
+              ["Top 10 before LOI", d.top10BeforeLoi],
+              ["Top 10 before close", d.top10BeforeClose],
+              ["Walk triggers", d.walkTriggers],
+              ["What would make it exceptional", d.exceptionalConditions],
+            ].map(([title, items]) => (
+              <details key={title as string}>
+                <summary className="cursor-pointer font-semibold">
+                  {title as string}
+                </summary>
+                <ol className="mt-2 list-decimal pl-5 text-sm">
+                  {(items as string[]).map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ol>
+              </details>
+            ))}
+            <details>
+              <summary className="cursor-pointer font-semibold">
+                Seller claims / verified facts / inferences / unanswered
+              </summary>
+              <div className="mt-2 grid gap-3 text-sm md:grid-cols-2">
+                {Object.entries(d.findings).map(([label, items]) => (
+                  <div key={label} className="rounded-xl bg-[var(--paper)] p-3">
+                    <div className="font-semibold">
+                      {label.replace(/([A-Z])/g, " $1")}
+                    </div>
+                    <ul className="mt-1 list-disc pl-5">
+                      {items.map((item) => (
+                        <li key={item}>{item}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+            </details>
             <details>
               <summary className="cursor-pointer font-semibold">Financial audit lines</summary>
               <table className="mt-2 w-full text-sm">
@@ -444,14 +523,40 @@ export function DealClient({ id }: { id: string }) {
         <section className="card rounded-2xl p-5">
           <h2 className="serif text-2xl">Tax sketch (CPA must verify)</h2>
           <p className="text-sm">
-            Year 1 deductions {money(deal.tax.year1Deductions)} · 5-year {money(deal.tax.year5Deductions)} · 10-year{" "}
-            {money(deal.tax.year10Deductions)}
+            Year 1 deductions{" "}
+            {deal.tax.year1Deductions == null
+              ? "UNANSWERED"
+              : money(deal.tax.year1Deductions)}
+            {" · "}Can offset TESIM income: {deal.tax.canOffsetTesimIncome}
           </p>
+          <div className="mt-3 grid gap-3 text-sm md:grid-cols-2">
+            <div>
+              <strong>Potential deferral / timing benefits</strong>
+              <ul className="mt-1 list-disc pl-5">
+                {deal.tax.deferralBenefits.map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+            </div>
+            <div>
+              <strong>Permanent savings</strong>
+              <ul className="mt-1 list-disc pl-5">
+                {deal.tax.permanentSavings.map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+            </div>
+          </div>
+          <ul className="mt-3 list-disc pl-5 text-sm">
+            {deal.tax.propertyTreatment.map((item) => (
+              <li key={item}>{item}</li>
+            ))}
+          </ul>
           <p className="mt-2 text-sm text-[var(--muted)]">{deal.tax.disclaimer}</p>
         </section>
       )}
 
-      {deal.downside && (
+      {deal.downside && deal.downside.length > 0 && (
         <section className="card rounded-2xl p-5">
           <h2 className="serif text-2xl">Downside testing</h2>
           <table className="mt-3 w-full text-sm">

@@ -41,35 +41,60 @@ export function computeTax(opts: {
   cashFlow?: number | null;
   interest?: number;
 }): TaxResult {
-  const ffe = opts.ffe ?? opts.purchasePrice * 0.2;
-  const realty = opts.realEstate ? opts.purchasePrice * 0.25 : 0;
-  const goodwill =
-    opts.structure === "asset"
-      ? Math.max(opts.purchasePrice - ffe - realty, 0)
-      : 0;
-  const bonus = opts.structure === "asset" ? ffe * 0.8 : 0;
-  const costSeg = opts.structure === "asset" ? realty * 0.2 : 0;
-  const amort = opts.structure === "asset" ? goodwill / 15 : 0;
-  const year1 = bonus + costSeg + amort + (opts.interest ?? 0);
-  const year5 = year1 + amort * 4 + ffe * 0.15;
-  const year10 = year5 + amort * 5;
-  const beforeTax = opts.cashFlow ?? null;
-  const afterTax =
-    beforeTax != null ? beforeTax * (opts.structure === "asset" ? 0.72 : 0.78) : null;
+  const assetDeal = opts.structure === "asset";
   return {
     structure: opts.structure,
-    year1Deductions: year1,
-    year5Deductions: year5,
-    year10Deductions: year10,
-    beforeTaxReturn: beforeTax,
-    afterTaxReturn: afterTax,
+    // A seller FF&E claim is not a tax allocation, so no deduction amount is
+    // calculated until the allocation and eligibility facts are verified.
+    year1Deductions: null,
+    year5Deductions: null,
+    year10Deductions: null,
+    beforeTaxReturn: opts.cashFlow ?? null,
+    afterTaxReturn: null,
+    permanentSavings: [
+      "NONE CONFIRMED. A purchase-price allocation and taxpayer-specific analysis are required.",
+      "Deductions do not create value equal to their face amount and generally do not cure weak operating economics.",
+    ],
+    deferralBenefits: assetDeal
+      ? [
+          "Eligible used equipment acquired in an asset deal may qualify for Section 168(k), subject to acquisition, related-party, placed-in-service, business-use, and current-law requirements.",
+          "Cost segregation may accelerate eligible building components; it changes timing and can create recapture.",
+          "Section 197 goodwill amortization may create 15-year deductions if allocated goodwill is actually acquired.",
+        ]
+      : [
+          "A stock purchase generally does not step up inside asset basis without a valid tax election.",
+        ],
+    eligibilityChecks: {
+      acquisitionEntityIdentity: "UNVERIFIED",
+      section469PassiveActivity: "UNVERIFIED",
+      taxBasis: "UNVERIFIED",
+      atRiskLimitations: "UNVERIFIED",
+    },
+    canOffsetTesimIncome: "UNVERIFIED",
+    propertyTreatment: [
+      opts.ffe
+        ? `Seller states ${opts.ffe.toLocaleString(
+            "en-US",
+            { style: "currency", currency: "USD", maximumFractionDigits: 0 }
+          )} of FF&E; tax basis, allocation, class life, and 168(k) eligibility are unverified.`
+        : "Equipment tax basis and purchase-price allocation are not provided.",
+      opts.realEstate
+        ? "A used factory building is not Section 168(n) qualified production property merely because manufacturing occurs there. Land is nondepreciable; the building and eligible components require separate analysis."
+        : "No acquired factory building is identified for this sketch.",
+      "New construction or qualified production property rules must not be applied to an acquired used building without tax-counsel verification.",
+    ],
     notes: [
-      "Asset deals usually create more near-term depreciation than stock deals.",
-      "Bonus depreciation, 179, cost segregation, MACRS, and 197 amortization are estimated only.",
-      "State tax is ignored in this sketch.",
+      "Deferral is not permanent savings: accelerated depreciation generally reduces later deductions and may be recaptured.",
+      "No assumption is made that acquisition deductions can offset approximately $20M of TESIM income.",
+      "Entity identity, Section 469, basis, at-risk, business-use, recapture, interest limits, and state conformity remain unverified.",
+      `Illustrative purchase price ${opts.purchasePrice.toLocaleString("en-US", {
+        style: "currency",
+        currency: "USD",
+        maximumFractionDigits: 0,
+      })}; no tax allocation is inferred.`,
     ],
     disclaimer:
-      "Tax conclusions require CPA / tax counsel verification. This is not tax advice.",
+      "Tax conclusions require TESIM's CPA and tax counsel. Tax never rescues a bad company.",
   };
 }
 
@@ -131,13 +156,31 @@ export function emptyDiligence(): DiligencePack {
       operations: 0,
       growth: 0,
       assets: 0,
-      financing: 0,
+      dealStructure: 0,
       tax: 0,
       legal: 0,
       total: 0,
     },
-    finalDecision: "CONTINUE",
+    finalDecision: "CONTINUE DILIGENCE",
     fatalRisks: [],
+    findings: {
+      sellerClaims: [],
+      verifiedFacts: [],
+      inferences: [],
+      unanswered: [],
+    },
+    recommendationWhy: [],
+    maxPrice: {
+      value: null,
+      basis: "UNANSWERED",
+      kind: "NOT_PROVIDED",
+    },
+    preferredStructure: [],
+    sellerProtections: [],
+    top10BeforeLoi: [],
+    top10BeforeClose: [],
+    walkTriggers: [],
+    exceptionalConditions: [],
     whatWeKnow: "",
     whatWeDont: "",
     whyItMatters: "",

@@ -171,7 +171,11 @@ describe("screening honesty", () => {
     expect(() => buildStage1(deal)).toThrow(/STEP 1A/);
     deal.ownerQuestions = buildOwnerQuestions(deal);
     expect(deal.ownerQuestions.questions).toHaveLength(40);
-    expect(deal.ownerQuestions.prospects).toHaveLength(30);
+    expect(deal.ownerQuestions.prospects).toHaveLength(0);
+    expect(
+      deal.ownerQuestions.questions.find((question) => question.id === 8)
+        ?.answer
+    ).toMatch(/NOT AVAILABLE/);
     expect(deal.ownerQuestions.sections).toHaveLength(7);
     expect(buildStage1(deal).preNdaScore).toBeGreaterThan(0);
   });

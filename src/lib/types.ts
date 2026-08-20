@@ -31,9 +31,9 @@ export type PacketDecision =
   | "RENEGOTIATE"
   | "PASS";
 export type FinalDecision =
-  | "STRONG_BUY"
-  | "BUY_CONDITIONS"
-  | "CONTINUE"
+  | "STRONG BUY"
+  | "BUY SUBJECT TO CONDITIONS"
+  | "CONTINUE DILIGENCE"
   | "RENEGOTIATE"
   | "PASS";
 
@@ -64,6 +64,10 @@ export interface EvidencePoint {
   kind: EvidenceKind;
   difference?: string;
   source?: string;
+  documentId?: string;
+  page?: number;
+  sheet?: string;
+  cell?: string;
 }
 
 export interface ScreeningQuestion {
@@ -106,10 +110,22 @@ export type OwnerDecision =
   | "PASS";
 
 export interface ResearchSource {
+  id: string;
   title: string;
   url?: string;
   accessedAt: string;
   kind: "LISTING" | "COMPANY_WEBSITE" | "PUBLIC_SOURCE" | "INDUSTRY_SOURCE" | "SELLER_MATERIAL";
+  excerpt?: string;
+  query?: string;
+}
+
+export interface PublicResearch {
+  status: "complete" | "unavailable" | "error";
+  provider: "tavily" | "direct_only" | "none";
+  searchedAt: string;
+  reason?: string;
+  companyWebsiteUrl?: string;
+  sources: ResearchSource[];
 }
 
 export interface OwnerQuestion {
@@ -148,6 +164,8 @@ export interface OwnerQuestionReport {
   score: number;
   decision: OwnerDecision;
   decisionWhy: string;
+  researchStatus?: PublicResearch["status"];
+  companyBrief?: string;
 }
 
 export interface EquipmentItem {
@@ -218,6 +236,11 @@ export interface CustomerRow {
   share: number;
   tenure?: string;
   interviewQuestions?: string[];
+  source?: {
+    documentId: string;
+    sheet?: string;
+    cell?: string;
+  };
 }
 
 export interface DiligencePack {
@@ -247,13 +270,31 @@ export interface DiligencePack {
     operations: number;
     growth: number;
     assets: number;
-    financing: number;
+    dealStructure: number;
     tax: number;
     legal: number;
     total: number;
   };
   finalDecision: FinalDecision;
   fatalRisks: string[];
+  findings: {
+    sellerClaims: string[];
+    verifiedFacts: string[];
+    inferences: string[];
+    unanswered: string[];
+  };
+  recommendationWhy: string[];
+  maxPrice: {
+    value: number | null;
+    basis: string;
+    kind: EvidenceKind;
+  };
+  preferredStructure: string[];
+  sellerProtections: string[];
+  top10BeforeLoi: string[];
+  top10BeforeClose: string[];
+  walkTriggers: string[];
+  exceptionalConditions: string[];
   whatWeKnow: string;
   whatWeDont: string;
   whyItMatters: string;
@@ -287,11 +328,21 @@ export interface FinancingResult {
 
 export interface TaxResult {
   structure: "asset" | "stock";
-  year1Deductions: number;
-  year5Deductions: number;
-  year10Deductions: number;
+  year1Deductions: number | null;
+  year5Deductions: number | null;
+  year10Deductions: number | null;
   beforeTaxReturn: number | null;
   afterTaxReturn: number | null;
+  permanentSavings: string[];
+  deferralBenefits: string[];
+  eligibilityChecks: {
+    acquisitionEntityIdentity: "UNVERIFIED";
+    section469PassiveActivity: "UNVERIFIED";
+    taxBasis: "UNVERIFIED";
+    atRiskLimitations: "UNVERIFIED";
+  };
+  canOffsetTesimIncome: "UNVERIFIED";
+  propertyTreatment: string[];
   notes: string[];
   disclaimer: string;
 }
@@ -324,6 +375,35 @@ export interface DocumentRecord {
   uploadedAt: string;
   size: number;
   textExcerpt?: string;
+  extraction?: DocumentExtraction;
+}
+
+export interface DocumentEvidenceChunk {
+  text: string;
+  page?: number;
+  sheet?: string;
+  cell?: string;
+}
+
+export interface ExtractedTableRow {
+  rowNumber: number;
+  values: Record<string, string | number | boolean | null>;
+  cells: Record<string, string>;
+}
+
+export interface ExtractedTable {
+  sheet: string;
+  range: string;
+  headers: string[];
+  rows: ExtractedTableRow[];
+}
+
+export interface DocumentExtraction {
+  status: "complete" | "failed" | "unsupported";
+  extractedAt: string;
+  error?: string;
+  chunks: DocumentEvidenceChunk[];
+  tables?: ExtractedTable[];
 }
 
 export interface TeamMember {
@@ -351,6 +431,7 @@ export interface Deal {
   batchId: string;
   name: string;
   listingUrl?: string;
+  websiteUrl?: string;
   industry: string;
   location: string;
   state?: string;
@@ -371,6 +452,7 @@ export interface Deal {
   createdAt: string;
   updatedAt: string;
   teamId?: string;
+  publicResearch?: PublicResearch;
   ownerQuestions?: OwnerQuestionReport;
   screening?: Stage1Screening;
   packet?: PacketReview;

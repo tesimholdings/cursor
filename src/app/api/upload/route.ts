@@ -12,7 +12,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Please upload a CSV or Excel file." }, { status: 400 });
   }
   const buf = Buffer.from(await file.arrayBuffer());
-  const rows = parseSpreadsheet(buf);
+  const rows = await parseSpreadsheet(buf, file.name);
   if (!rows.length) {
     return NextResponse.json(
       { error: "No companies found. Need a Company / Name column." },

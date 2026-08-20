@@ -8,9 +8,9 @@ export function investmentCommitteeHtml(deal: Deal) {
   const d = deal.diligence;
   const f = deal.financing?.result;
   const t = deal.tax;
-  const rec = d?.finalDecision || s?.decision || "CONTINUE";
+  const rec = d?.finalDecision || "CONTINUE DILIGENCE";
   const sections: [string, string][] = [
-    ["1. Executive Summary", `${deal.name} is a ${deal.industry} business in ${deal.location}. Asking ${money(deal.askingPrice)}. Owner score ${o?.score ?? "—"}. Step 1B Pre-NDA score ${s?.preNdaScore ?? "—"}. Packet score ${p?.score ?? "—"}. Final score ${d?.scores.total ?? "—"}. Recommendation: ${rec}.`],
+    ["1. Executive Summary", `${deal.name} is a ${deal.industry} business in ${deal.location}. Asking ${money(deal.askingPrice)}. Owner score ${o?.score ?? "—"}. Step 1B Pre-NDA score ${s?.preNdaScore ?? "—"}. Packet score ${p?.score ?? "—"}. IC score ${d?.scores.total ?? "—"}/100. Recommendation: ${rec}. Why: ${d?.recommendationWhy.join(" ") || "Full IC evidence is not available."}`],
     ["2. What the Business Does", o?.questions.find((q) => q.id === 1)?.answer || s?.questions.find((q) => q.id === 1)?.answer || "NOT PROVIDED"],
     ["3. Industry Need", o?.questions.find((q) => q.id === 2)?.answer || s?.questions.find((q) => q.id === 2)?.answer || "NOT PROVIDED"],
     ["4. Market Size & Growth", o?.questions.find((q) => q.id === 3)?.answer || s?.questions.find((q) => q.id === 3)?.answer || "NOT PROVIDED"],
@@ -27,19 +27,19 @@ export function investmentCommitteeHtml(deal: Deal) {
     ["15. Management", p?.answers["Is management sufficient?"]?.answer || "NOT PROVIDED"],
     ["16. Growth Opportunities", (d?.growthPlan.year1 || []).join(" ")],
     ["17. Additional Revenue Streams", s?.questions.find((q) => q.id === 10)?.answer || "NOT PROVIDED"],
-    ["18. Financing", f ? `Debt service ${money(f.annualDebtService)}. DSCR ${f.dscr?.toFixed(2) ?? "—"}. Cash-on-cash ${f.cashOnCash != null ? pct(f.cashOnCash) : "—"}.` : "NOT PROVIDED"],
-    ["19. Tax Strategy", t ? `Year 1 deductions ${money(t.year1Deductions)}. 5-year ${money(t.year5Deductions)}. 10-year ${money(t.year10Deductions)}. ${t.disclaimer}` : "NOT PROVIDED"],
+    ["18. Financing", `${f ? `Debt service ${money(f.annualDebtService)}. DSCR ${f.dscr?.toFixed(2) ?? "UNANSWERED"}. Cash-on-cash ${f.cashOnCash != null ? pct(f.cashOnCash) : "UNANSWERED"}.` : "NOT PROVIDED"} Preferred structure: ${d?.preferredStructure.join(" ") || "UNANSWERED"}`],
+    ["19. Tax Strategy", t ? `Year 1 deductions ${t.year1Deductions == null ? "UNANSWERED" : money(t.year1Deductions)}. Ability to offset TESIM income: ${t.canOffsetTesimIncome}. Deferral/timing: ${t.deferralBenefits.join(" ")} Permanent savings: ${t.permanentSavings.join(" ")} Property treatment: ${t.propertyTreatment.join(" ")} ${t.disclaimer}` : "NOT PROVIDED"],
     ["20. Valuation", s ? `${s.valuationLabel}` : "Unknown"],
     ["21. Downside Scenarios", (deal.downside || []).map((c) => `${c.name}: EBITDA ${money(c.ebitda)} DSCR ${c.dscr?.toFixed(2) ?? "—"}`).join(" | ") || "NOT RUN"],
-    ["22. Major Risks", (d?.fatalRisks.length ? d.fatalRisks : ["No fatal risk flagged yet — that is not the same as no risk."]).join(" ")],
-    ["23. Diligence Findings", d?.whatWeKnow || "NOT PROVIDED"],
+    ["22. Major Risks", `${(d?.fatalRisks.length ? d.fatalRisks : ["No fatal risk proven yet — that is not the same as no risk."]).join(" ")} Walk triggers: ${d?.walkTriggers.join(" ") || "NOT PROVIDED"}`],
+    ["23. Diligence Findings", `SELLER CLAIMS: ${d?.findings.sellerClaims.join(" ") || "NONE"} VERIFIED FACTS: ${d?.findings.verifiedFacts.join(" ") || "NONE"} INFERENCES: ${d?.findings.inferences.join(" ") || "NONE"}`],
     ["24. Missing Information", d?.whatWeDont || s?.whatWeDont || "NOT PROVIDED"],
-    ["25. Seller Questions", (p?.topQuestions || []).join(" ")],
+    ["25. Seller Questions", `TOP 10 BEFORE LOI: ${d?.top10BeforeLoi.join(" ") || (p?.topQuestions || []).join(" ")} TOP 10 BEFORE CLOSE: ${d?.top10BeforeClose.join(" ") || "NOT PROVIDED"}`],
     ["26. Customer Questions", (d?.customerInterviewQuestions || []).join(" ")],
-    ["27. Recommended Deal Protections", "Holdback, working-capital peg, customer-call condition, equipment representation, environmental condition, seller note / earnout if concentration is high."],
-    ["28. Maximum Purchase Price", `Start from buyer-adjusted cash flow, not seller SDE. If buyer SDE is ${money(d?.buyerSde)}, a 3.5–4.0x range is a common working band for this size — ESTIMATE only, not an offer.`],
+    ["27. Recommended Deal Protections", d?.sellerProtections.join(" ") || "Holdback, working-capital peg, customer-call condition, equipment representation, and environmental condition."],
+    ["28. Maximum Purchase Price", d ? `${d.maxPrice.value == null ? "UNANSWERED" : money(d.maxPrice.value)}. ${d.maxPrice.basis}` : "UNANSWERED"],
     ["29. First 100-Day Plan", (d?.growthPlan.first100 || []).join(" ")],
-    ["30. Final Buy / Pass Recommendation", String(rec)],
+    ["30. Final Buy / Pass Recommendation", `${String(rec)}. What would make it exceptional: ${d?.exceptionalConditions.join(" ") || "UNANSWERED"}`],
   ];
 
   const body = sections
