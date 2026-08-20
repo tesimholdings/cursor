@@ -135,7 +135,7 @@ export function buildStage1(deal: Deal): Stage1Screening {
       citedProspects.length ? "green" : "yellow",
       citedProspects.length ? "EXTERNAL_RESEARCH" : "NOT_PROVIDED",
       citedProspects
-        .map((p) => `${p.company} — ${p.fit} fit — ${p.whyFit}`)
+        .map((p) => `${p.company} — inferred ${p.fit} fit — ${p.whyFit}`)
         .join("\n")
     ),
     q(

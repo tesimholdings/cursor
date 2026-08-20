@@ -165,7 +165,11 @@ ${questionPacket}`,
           .join(" ");
         return {
           company: prospect.company,
-          industry: prospect.industry,
+          industry: citedText
+            .toLowerCase()
+            .includes(prospect.industry.toLowerCase())
+            ? prospect.industry
+            : "NOT AVAILABLE — industry not supported by cited excerpt",
           revenue: numericClaimsSupported(prospect.revenue, citedText)
             ? prospect.revenue
             : "NOT AVAILABLE — cited source did not support a revenue figure",
@@ -198,7 +202,7 @@ ${questionPacket}`,
           (prospect, index) =>
             `${index + 1}. ${prospect.company} | ${prospect.industry} | ${
               prospect.revenue
-            } | ${prospect.location} | ${prospect.fit} | Could buy: ${
+            } | ${prospect.location} | Fit (INFERENCE): ${prospect.fit} | Could buy: ${
               prospect.potentialOffering
             } | Fit: ${prospect.whyFit} | Barrier: ${prospect.barrier}`
         )
