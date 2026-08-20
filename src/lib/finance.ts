@@ -114,6 +114,8 @@ export function emptyDiligence(): DiligencePack {
     questionableAddbacks: [],
     customers: [],
     concentrationFlag: "UNKNOWN",
+    concentrationNote: "NOT PROVIDED",
+    customerInterviewQuestions: [],
     equipment: [],
     realEstateNotes: "NOT PROVIDED",
     growthPlan: {

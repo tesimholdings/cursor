@@ -229,6 +229,8 @@ export interface DiligencePack {
   questionableAddbacks: string[];
   customers: CustomerRow[];
   concentrationFlag: "HIGH" | "MEDIUM_HIGH" | "PREFERABLE" | "UNKNOWN";
+  concentrationNote: string;
+  customerInterviewQuestions: string[];
   equipment: EquipmentItem[];
   maxRevenueOnCurrentEquipment?: string;
   realEstateNotes: string;

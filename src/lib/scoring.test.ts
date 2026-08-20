@@ -5,6 +5,7 @@ import { parseMoney } from "./format";
 import { roleForQuestion } from "./assign";
 import { buildStage1 } from "./screening";
 import { buildOwnerQuestions } from "./owner-questions";
+import { runDiligence } from "./diligence";
 import type { Deal } from "./types";
 
 describe("scoring", () => {
@@ -83,6 +84,37 @@ describe("assign", () => {
     expect(roleForQuestion("Please review customer contracts")).toBe("Attorney");
     expect(roleForQuestion("Tie revenue to tax returns")).toBe("CPA");
     expect(roleForQuestion("Model DSCR for the SBA loan")).toBe("Financial Planner");
+  });
+});
+
+describe("diligence honesty", () => {
+  it("never models customer concentration without a customer file", () => {
+    const deal = {
+      id: "conc",
+      batchId: "b",
+      name: "Concentration Test",
+      industry: "Injection molding",
+      location: "Toledo, OH",
+      askingPrice: 6_000_000,
+      revenue: 4_000_000,
+      sde: 900_000,
+      realEstateIncluded: false,
+      sellerFinancing: false,
+      status: "diligence",
+      researchStatus: "complete",
+      createdAt: "",
+      updatedAt: "",
+      documents: [],
+      assignedQuestions: [],
+      fatalRisks: [],
+    } as Deal;
+
+    const pack = runDiligence(deal);
+    expect(pack.customers).toHaveLength(0);
+    expect(pack.concentrationFlag).toBe("UNKNOWN");
+    expect(pack.concentrationNote).toMatch(/NOT PROVIDED/);
+    expect(pack.customerInterviewQuestions.length).toBeGreaterThan(0);
+    expect(pack.fatalRisks.join(" ")).not.toMatch(/exceeds 50%/);
   });
 });
 

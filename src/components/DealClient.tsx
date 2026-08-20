@@ -383,13 +383,24 @@ export function DealClient({ id }: { id: string }) {
             <details>
               <summary className="cursor-pointer font-semibold">Customers</summary>
               <p className="text-sm">Concentration flag: {d.concentrationFlag.replace("_", " ")}</p>
-              <ul className="text-sm">
-                {d.customers.map((c) => (
-                  <li key={c.name}>
-                    {c.name}: {money(c.revenue)} ({pct(c.share)})
-                  </li>
-                ))}
-              </ul>
+              <p className="mt-1 text-sm text-[var(--muted)]">{d.concentrationNote}</p>
+              {d.customers.length > 0 && (
+                <ul className="mt-2 text-sm">
+                  {d.customers.map((c) => (
+                    <li key={c.name}>
+                      {c.name}: {money(c.revenue)} ({pct(c.share)})
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <div className="mt-3 text-sm">
+                <strong>Questions for any significant customer</strong>
+                <ul className="mt-1 list-disc pl-5">
+                  {d.customerInterviewQuestions.map((q) => (
+                    <li key={q}>{q}</li>
+                  ))}
+                </ul>
+              </div>
             </details>
             <details>
               <summary className="cursor-pointer font-semibold">Growth plan</summary>

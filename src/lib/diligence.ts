@@ -60,41 +60,41 @@ export function runDiligence(deal: Deal): DiligencePack {
     "Depreciation add-back does not mean machines are free. Include maintenance capex.",
   ];
 
-  const customers = [
-    {
-      name: "Top customer (name NOT PROVIDED)",
-      revenue: deal.revenue ? deal.revenue * 0.32 : 0,
-      share: 0.32,
-      tenure: "NOT PROVIDED",
-      interviewQuestions: [
-        "How long have you used this supplier?",
-        "Who do you call when something goes wrong?",
-        "Would a change of ownership affect your orders?",
-        "Do you own tooling or equipment on site?",
-        "What would make you dual-source?",
-      ],
-    },
-    {
-      name: "Customer 2 (NOT PROVIDED)",
-      revenue: deal.revenue ? deal.revenue * 0.14 : 0,
-      share: 0.14,
-      tenure: "NOT PROVIDED",
-    },
-    {
-      name: "Customer 3 (NOT PROVIDED)",
-      revenue: deal.revenue ? deal.revenue * 0.09 : 0,
-      share: 0.09,
-      tenure: "NOT PROVIDED",
-    },
+  // Concentration is only ever derived from a real customer revenue file.
+  // Without one we report UNKNOWN rather than modelling a share.
+  const customers: DiligencePack["customers"] = [];
+  const topShare = customers[0]?.share ?? null;
+  const concentrationFlag: DiligencePack["concentrationFlag"] =
+    topShare == null
+      ? "UNKNOWN"
+      : topShare > 0.5
+        ? "HIGH"
+        : topShare >= 0.25
+          ? "MEDIUM_HIGH"
+          : "PREFERABLE";
+  const concentrationNote =
+    concentrationFlag === "UNKNOWN"
+      ? "NOT PROVIDED — no customer revenue report has been parsed. Top 1 / 3 / 5 percentages cannot be calculated. Thresholds once data arrives: over 50% is HIGH RISK, 25–50% is MEDIUM/HIGH, under 20% is preferable."
+      : "Calculated from the uploaded customer revenue report.";
+  const customerInterviewQuestions = [
+    "How long have you used this supplier?",
+    "Who do you call when something goes wrong?",
+    "Would a change of ownership affect your orders?",
+    "Do you own tooling or equipment on site?",
+    "What would make you dual-source?",
+    "Do you expect your purchases to grow, hold, or shrink?",
   ];
-
-  const topShare = customers[0]?.share ?? 0;
-  const concentrationFlag =
-    topShare > 0.5 ? "HIGH" : topShare >= 0.25 ? "MEDIUM_HIGH" : topShare > 0 ? "PREFERABLE" : "UNKNOWN";
 
   const scores = {
     financial: clamp((deal.packet?.score || 50) - (conflict ? 15 : 0)),
-    customer: concentrationFlag === "HIGH" ? 6 : concentrationFlag === "MEDIUM_HIGH" ? 8 : 10,
+    customer:
+      concentrationFlag === "HIGH"
+        ? 6
+        : concentrationFlag === "MEDIUM_HIGH"
+          ? 8
+          : concentrationFlag === "UNKNOWN"
+            ? 7
+            : 10,
     operations: 8,
     growth: deal.screening?.growthScore ? Math.round(deal.screening.growthScore * 0.15) : 8,
     assets: deal.realEstateIncluded ? 8 : 5,
@@ -129,7 +129,7 @@ export function runDiligence(deal: Deal): DiligencePack {
   const fatalRisks = [...deal.fatalRisks];
   if (conflict) fatalRisks.push("Earnings cannot be reconciled between listing and packet.");
   if (concentrationFlag === "HIGH") {
-    fatalRisks.push("If the top customer is truly >50% and will not take a call, this can be a deal killer.");
+    fatalRisks.push("Top customer exceeds 50% of revenue. If they will not take a call, this is a deal killer.");
   }
 
   let finalDecision: FinalDecision = "CONTINUE";
@@ -152,6 +152,8 @@ export function runDiligence(deal: Deal): DiligencePack {
     questionableAddbacks,
     customers,
     concentrationFlag,
+    concentrationNote,
+    customerInterviewQuestions,
     equipment: [
       {
         name: "Major equipment (schedule NOT PROVIDED)",
@@ -208,7 +210,7 @@ export function runDiligence(deal: Deal): DiligencePack {
     fatalRisks,
     whatWeKnow: `Seller SDE ${sellerSde ? money(sellerSde) : "NOT PROVIDED"}. Buyer-adjusted SDE ${buyerSde ? money(buyerSde) : "NOT PROVIDED"} (ASSUMPTION: 15% haircut until QoE). Packet score ${deal.packet?.score ?? "—"}.`,
     whatWeDont:
-      "GL-level earnings, tax-return tie-out, true customer file, machine utilization, environmental Phase I, and bank-ready DSCR.",
+      "GL-level earnings, tax-return tie-out, customer concentration (no customer revenue report parsed), machine utilization, environmental Phase I, and bank-ready DSCR.",
     whyItMatters: "This is the last filter before we commit legal and accounting spend at full speed — or walk.",
     whatNext:
       finalDecision === "PASS"
