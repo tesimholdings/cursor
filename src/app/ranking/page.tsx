@@ -12,12 +12,12 @@ import {
   type BrokerCall,
 } from "@/lib/pipeline";
 
+type Persistence = { durable: boolean; note: string; error?: string };
+
 export default function RankingPage() {
   const [deals, setDeals] = useState<Deal[]>([]);
-  const [persistence, setPersistence] = useState<{
-    durable: boolean;
-    note: string;
-  } | null>(null);
+  const [persistence, setPersistence] = useState<Persistence | null>(null);
+  const [failure, setFailure] = useState<string | null>(null);
   const [researching, setResearching] = useState(false);
   const [bestOnly, setBestOnly] = useState(false);
   const [filters, setFilters] = useState({
@@ -36,8 +36,15 @@ export default function RankingPage() {
           const response = await fetch("/api/deals", { cache: "no-store" });
           const payload = await response.json();
           if (cancelled) return;
-          setDeals(payload.deals || []);
           setPersistence(payload.persistence || null);
+          if (!response.ok || payload.storeUnavailable) {
+            setFailure(
+              payload.error || `The deal store returned ${response.status}.`
+            );
+            return;
+          }
+          setFailure(null);
+          setDeals(payload.deals || []);
           if (!payload.research?.pending) return;
           const research = await fetch("/api/research", {
             method: "POST",
@@ -115,9 +122,20 @@ export default function RankingPage() {
         </div>
       </div>
 
-      {persistence && !persistence.durable && (
+      {failure && (
+        <div className="rounded-2xl bg-red-100 px-5 py-4 text-sm text-red-950">
+          <strong>The shared deal store is unreachable.</strong> The board is
+          hidden because a partial list would understate the pipeline.
+          <div className="mt-2 font-mono text-xs">{failure}</div>
+        </div>
+      )}
+
+      {!failure && persistence && !persistence.durable && (
         <div className="rounded-2xl bg-amber-100 px-5 py-3 text-sm text-amber-950">
           <strong>Storage is not shared yet.</strong> {persistence.note}
+          {persistence.error && (
+            <div className="mt-2 font-mono text-xs">{persistence.error}</div>
+          )}
         </div>
       )}
 
@@ -166,7 +184,10 @@ export default function RankingPage() {
         />
       </div>
 
-      <div className="card overflow-x-auto rounded-2xl">
+      <div
+        className="card overflow-x-auto rounded-2xl"
+        hidden={Boolean(failure)}
+      >
         <table className="w-full min-w-[1320px] text-left text-sm">
           <thead className="border-b border-[var(--line)] text-xs uppercase tracking-wide text-[var(--muted)]">
             <tr>

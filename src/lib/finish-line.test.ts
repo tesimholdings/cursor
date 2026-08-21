@@ -302,27 +302,50 @@ SDE: $1.1M`);
 });
 
 describe("shared persistence configuration", () => {
-  it("requires either Blob OIDC + store id or a read/write token", () => {
-    expect(blobConfiguration({})).toMatchObject({ configured: false });
+  it("treats a store id on Vercel as configured, because the OIDC token arrives per request", () => {
+    expect(
+      blobConfiguration({ VERCEL: "1", BLOB_STORE_ID: "store_abc" })
+    ).toMatchObject({
+      configured: true,
+      source: "vercel-oidc",
+      onVercel: true,
+      storeId: true,
+      oidcTokenInEnv: false,
+    });
+  });
+
+  it("accepts a pulled OIDC token off Vercel and a read/write token anywhere", () => {
     expect(
       blobConfiguration({
         VERCEL_OIDC_TOKEN: "oidc",
-        BLOB_STORE_ID: "store",
+        BLOB_STORE_ID: "store_abc",
       })
-    ).toMatchObject({
-      configured: true,
-      oidcToken: true,
-      storeId: true,
-      readWriteToken: false,
-    });
+    ).toMatchObject({ configured: true, source: "vercel-oidc" });
     expect(
       blobConfiguration({ BLOB_READ_WRITE_TOKEN: "token" })
     ).toMatchObject({
       configured: true,
+      source: "read-write-token",
       readWriteToken: true,
+    });
+  });
+
+  it("stays unconfigured without a store id or a read/write token", () => {
+    expect(blobConfiguration({})).toMatchObject({
+      configured: false,
+      source: "none",
+    });
+    expect(blobConfiguration({ VERCEL: "1" })).toMatchObject({
+      configured: false,
+      source: "none",
     });
     expect(blobConfiguration({ VERCEL_OIDC_TOKEN: "oidc" })).toMatchObject({
       configured: false,
+      source: "none",
+    });
+    expect(blobConfiguration({ BLOB_STORE_ID: "store_abc" })).toMatchObject({
+      configured: false,
+      source: "none",
     });
   });
 });

@@ -68,11 +68,17 @@ Hosted notes:
     --project acquisition-command-center --scope tesim-holdings
   ```
 
-  Vercel injects `BLOB_STORE_ID` and rotating `VERCEL_OIDC_TOKEN` credentials.
-  Outside Vercel, `BLOB_READ_WRITE_TOKEN` is the fallback.
-- Until Blob credentials exist, the app deliberately reports `durable: false`
-  and uses local/temp storage. If Blob is configured but fails, requests fail
-  visibly rather than silently losing data in `/tmp`.
+- A connected OIDC store injects `BLOB_STORE_ID`, but **not**
+  `VERCEL_OIDC_TOKEN`: the SDK reads the token from the per-request
+  `x-vercel-oidc-token` header and only falls back to the environment variable.
+  So on Vercel a store id is sufficient, and no static token is required.
+  Outside Vercel, use `vercel env pull` or `BLOB_READ_WRITE_TOKEN`.
+- `GET /api/deals` reports `persistence.credential`, which asks the SDK for an
+  actual credential rather than guessing from environment variables.
+- With no store connected, the app reports `durable: false` and uses temp
+  storage. If a store is connected but unusable, `/api/deals` returns 503 with
+  the real Blob error and the UI says so, instead of quietly serving a partial
+  board out of `/tmp`.
 - Search and AI synthesis stay off until their keys are set in the Vercel
   project's environment variables.
 

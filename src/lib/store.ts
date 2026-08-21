@@ -7,9 +7,11 @@ import {
   blobConfiguration,
   blobLocation,
   isBlobConflict,
+  probeBlobCredential,
   readBlobStore,
   writeBlobStore,
   type BlobConfiguration,
+  type BlobCredentialProbe,
 } from "./blob-store";
 
 // Hosted serverless filesystems are read-only apart from a temp directory, so
@@ -44,37 +46,65 @@ export interface StorePersistence {
   note: string;
   error?: string;
   configuration: BlobConfiguration;
+  credential?: BlobCredentialProbe;
 }
 
-export function storePersistence(): StorePersistence {
+function unsharedNote(blob: BlobConfiguration): string {
+  if (!durable) {
+    return "Deal data is held in memory only because this filesystem is read-only. Uploads and screens reset when the instance recycles.";
+  }
+  if (!EPHEMERAL_DIR) {
+    return "Deal data is written to disk and survives restarts.";
+  }
+  // On Vercel a store id alone counts as configured, so reaching here means no
+  // store is connected at all.
+  if (blob.onVercel) {
+    return "No Vercel Blob store is connected to this project, so each serverless instance uses its own temporary copy. A company added now can vanish on refresh. Connect a private Blob store to Preview and Production, then redeploy.";
+  }
+  return blob.storeId
+    ? "A Blob store id is present but no local Blob credential is available. Run `vercel env pull` to work against the shared store locally; until then this is temporary storage."
+    : "Deal data is written to this instance's temporary storage. Uploads and screens reset on redeploy or when the instance recycles.";
+}
+
+export function storePersistence(
+  credential?: BlobCredentialProbe
+): StorePersistence {
   const blob = blobConfiguration();
   if (blob.configured) {
+    const credentialFailure =
+      credential && !credential.available ? credential.reason : undefined;
+    const failure = lastPersistError || credentialFailure;
     return {
-      durable: !lastPersistError,
+      durable: !failure,
       backend: "vercel-blob",
       location: blobLocation(),
-      note: lastPersistError
-        ? "Vercel Blob is configured but the last shared-store operation failed."
-        : "Deal data is shared in Vercel Blob across functions, instances, and deployments.",
-      error: lastPersistError,
+      note: failure
+        ? "A Vercel Blob store is connected but this request could not use it, so deal data is not shared right now. The underlying error is reported below."
+        : blob.source === "vercel-oidc"
+          ? "Deal data is shared in the connected private Vercel Blob store using rotating OIDC credentials, so every serverless instance sees the same board."
+          : "Deal data is shared in the connected private Vercel Blob store, so every serverless instance sees the same board.",
+      error: failure,
       configuration: blob,
+      credential,
     };
   }
-  const writable = durable;
   return {
-    durable: writable && !EPHEMERAL_DIR,
-    backend: writable ? "filesystem" : "memory",
+    durable: durable && !EPHEMERAL_DIR,
+    backend: durable ? "filesystem" : "memory",
     location: STORE_PATH,
-    note: !writable
-      ? "Deal data is held in memory only because this filesystem is read-only. Uploads and screens reset when the instance recycles."
-      : EPHEMERAL_DIR
-        ? process.env.VERCEL
-          ? "Vercel Blob is not connected to this project. Each serverless instance has its own temporary copy, so a company you just added can vanish on refresh. Create a private Blob store named acquisition-command-center-data, connect Preview and Production, and redeploy."
-          : "Deal data is written to this instance's temporary storage. Uploads and screens reset on redeploy or when the instance recycles."
-        : "Deal data is written to disk and survives restarts.",
+    note: unsharedNote(blob),
     error: lastPersistError,
     configuration: blob,
+    credential,
   };
+}
+
+// Async companion to `storePersistence` that asks the SDK for a real credential
+// instead of inferring one from environment variables.
+export async function storeStatus(): Promise<StorePersistence> {
+  const blob = blobConfiguration();
+  if (!blob.configured) return storePersistence();
+  return storePersistence(await probeBlobCredential());
 }
 
 function persistLocal(store: Store) {

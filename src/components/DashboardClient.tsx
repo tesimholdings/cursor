@@ -8,19 +8,33 @@ import type { Deal, Store } from "@/lib/types";
 import Link from "next/link";
 import { Play } from "lucide-react";
 
+type Persistence = { durable: boolean; note: string; error?: string };
+
 type Payload = Store & {
   funnel: { label: string; value: number }[];
   research: { total: number; done: number; running: number; pending: number };
-  persistence?: { durable: boolean; note: string };
+  persistence?: Persistence;
 };
+
+type StoreFailure = { error: string; persistence?: Persistence };
 
 export function DashboardClient() {
   const [data, setData] = useState<Payload | null>(null);
+  const [failure, setFailure] = useState<StoreFailure | null>(null);
   const [busy, setBusy] = useState(false);
 
   async function load() {
     const res = await fetch("/api/deals", { cache: "no-store" });
-    setData(await res.json());
+    const json = await res.json();
+    if (!res.ok || json.storeUnavailable) {
+      setFailure({
+        error: json.error || `The deal store returned ${res.status}.`,
+        persistence: json.persistence,
+      });
+      return;
+    }
+    setFailure(null);
+    setData(json);
   }
 
   useEffect(() => {
@@ -50,6 +64,19 @@ export function DashboardClient() {
     } finally {
       setBusy(false);
     }
+  }
+
+  if (failure) {
+    return (
+      <div className="rounded-2xl bg-red-100 px-5 py-4 text-sm text-red-950">
+        <strong>The shared deal store is unreachable.</strong> No pipeline is
+        shown because a partial board would understate the pipeline.
+        <div className="mt-2 font-mono text-xs">{failure.error}</div>
+        {failure.persistence?.note && (
+          <div className="mt-2">{failure.persistence.note}</div>
+        )}
+      </div>
+    );
   }
 
   if (!data) return <p className="text-[var(--muted)]">Loading the pipeline…</p>;
@@ -87,6 +114,11 @@ export function DashboardClient() {
       {data.persistence && !data.persistence.durable && (
         <div className="rounded-2xl bg-amber-100 px-5 py-3 text-sm text-amber-950">
           <strong>Storage is not shared yet.</strong> {data.persistence.note}
+          {data.persistence.error && (
+            <div className="mt-2 font-mono text-xs">
+              {data.persistence.error}
+            </div>
+          )}
         </div>
       )}
 
