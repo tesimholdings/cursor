@@ -57,10 +57,22 @@ exist, then comments the preview URL on the open pull request.
 
 Hosted notes:
 
-- Serverless filesystems are read-only, so deal data is kept in memory and
-  resets when the instance recycles. The dashboard shows a banner when storage
-  is not durable. Set `ACC_DATA_DIR` to a writable, persistent path for durable
-  storage.
+- Deal data uses a single private Vercel Blob object with ETag compare-and-swap
+  so every serverless instance sees the same store without lost updates.
+- Create and connect the store once from a Vercel-authenticated terminal:
+
+  ```bash
+  npx vercel@latest blob create-store acquisition-command-center-data \
+    --access private --region iad1 --yes \
+    --environment preview --environment production \
+    --project acquisition-command-center --scope tesim-holdings
+  ```
+
+  Vercel injects `BLOB_STORE_ID` and rotating `VERCEL_OIDC_TOKEN` credentials.
+  Outside Vercel, `BLOB_READ_WRITE_TOKEN` is the fallback.
+- Until Blob credentials exist, the app deliberately reports `durable: false`
+  and uses local/temp storage. If Blob is configured but fails, requests fail
+  visibly rather than silently losing data in `/tmp`.
 - Search and AI synthesis stay off until their keys are set in the Vercel
   project's environment variables.
 

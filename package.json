@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@ai-sdk/openai": "^4.0.45",
+    "@vercel/blob": "^2.8.0",
     "ai": "^7.0.71",
     "cheerio": "^1.2.0",
     "clsx": "^2.1.1",

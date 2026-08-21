@@ -19,6 +19,7 @@ import {
   FUNNEL_STEPS,
 } from "./pipeline";
 import { parsePastedListing } from "./intake";
+import { blobConfiguration } from "./blob-store";
 import type {
   Deal,
   DocumentRecord,
@@ -296,6 +297,32 @@ SDE: $1.1M`);
       revenue: 4_000_000,
       sde: 1_100_000,
       ebitda: null,
+    });
+  });
+});
+
+describe("shared persistence configuration", () => {
+  it("requires either Blob OIDC + store id or a read/write token", () => {
+    expect(blobConfiguration({})).toMatchObject({ configured: false });
+    expect(
+      blobConfiguration({
+        VERCEL_OIDC_TOKEN: "oidc",
+        BLOB_STORE_ID: "store",
+      })
+    ).toMatchObject({
+      configured: true,
+      oidcToken: true,
+      storeId: true,
+      readWriteToken: false,
+    });
+    expect(
+      blobConfiguration({ BLOB_READ_WRITE_TOKEN: "token" })
+    ).toMatchObject({
+      configured: true,
+      readWriteToken: true,
+    });
+    expect(blobConfiguration({ VERCEL_OIDC_TOKEN: "oidc" })).toMatchObject({
+      configured: false,
     });
   });
 });
