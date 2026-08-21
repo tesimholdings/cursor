@@ -46,7 +46,11 @@ import {
   weightedScore,
 } from "./board-scoring";
 import { closeSpeedFor, closeSpeedResult } from "./close-speed";
-import { buildDealPicture, printedConcentration } from "./deal-picture";
+import {
+  buildDealPicture,
+  collapseSpacedCaps,
+  printedConcentration,
+} from "./deal-picture";
 import { refreshDealFromDocuments } from "./refresh-deal";
 import { defaultWhy } from "./copy";
 import type {
@@ -1167,6 +1171,28 @@ describe("CIM deal picture and tight copy", () => {
       "SELLER_CLAIM"
     );
     expect(dealFunnelStep(deal)).toBe(1);
+  });
+
+  it("collapses spaced CIM headers and keeps the operating sentence", () => {
+    expect(collapseSpacedCaps("C O N F I D E N T I A L I N F O R M A T I O N")).toBe(
+      "CONFIDENTIALINFORMATION"
+    );
+    const deal = baseDeal();
+    deal.name = "Uniquecoat Technologies";
+    deal.documents.push({
+      id: "uct2",
+      dealId: deal.id,
+      name: "UCT_CIM.pdf",
+      category: "cim",
+      stage: 2,
+      uploadedAt: new Date().toISOString(),
+      size: 20,
+      textExcerpt:
+        'C O N F I D E N T I A L I N F O R M A T I O N M E M O R A N D U M. The Company is a vertically integrated designer and manufacturer of advanced HVAF thermal spray equipment for industrial customers.',
+    });
+    const picture = buildDealPicture(deal);
+    expect(picture.summary).toMatch(/HVAF thermal spray/i);
+    expect(picture.summary).not.toMatch(/C O N F I D E N T I A L/);
   });
 
   it("skips CIM disclaimer pages and uses the operating description", () => {

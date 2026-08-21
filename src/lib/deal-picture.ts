@@ -10,7 +10,7 @@ import { money, multiple } from "./format";
 import { headlineScore } from "./board-scoring";
 import type { Deal, DealPicture, DealPictureFact, DocumentRecord } from "./types";
 
-export const DEAL_PICTURE_VERSION = 3;
+export const DEAL_PICTURE_VERSION = 4;
 
 const BUSINESS_HINT =
   /\b(provides?|manufactur|sells?|specializ|serves?|produces?|offers?|operat|designs?|installs?|customers?|revenue|employees?|injection|thermal spray|landscap|contractor|general contractor)\b/i;
@@ -24,13 +24,19 @@ export function hasReadableCim(deal: Deal) {
   );
 }
 
+export function collapseSpacedCaps(text: string) {
+  return text.replace(/(?:[A-Z]\s+){3,}[A-Z]/g, (match) =>
+    match.replace(/\s+/g, "")
+  );
+}
+
 function documentText(document: DocumentRecord) {
-  return (
-    document.textExcerpt ||
-    readableDocumentText(document.extraction?.chunks || [])
-  )
-    .replace(/\s+/g, " ")
-    .trim();
+  return collapseSpacedCaps(
+    (
+      document.textExcerpt ||
+      readableDocumentText(document.extraction?.chunks || [])
+    ).replace(/\s+/g, " ")
+  ).trim();
 }
 
 export function isPlaceholderCim(text: string) {
@@ -56,11 +62,7 @@ export function packetText(
 ) {
   return deal.documents
     .filter((document) => categories.includes(document.category))
-    .map(
-      (document) =>
-        document.textExcerpt ||
-        readableDocumentText(document.extraction?.chunks || [])
-    )
+    .map((document) => documentText(document))
     .filter(Boolean)
     .join(" ")
     .replace(/\s+/g, " ")
@@ -98,7 +100,8 @@ export function cimProse(deal: Deal, maxSentences = 4) {
       (part) =>
         part.length >= 40 &&
         part.length <= 480 &&
-        !SKIP_PROSE.test(part)
+        !SKIP_PROSE.test(part) &&
+        !/^confidential\b/i.test(part)
     );
   const useful = parts.filter((part) => BUSINESS_HINT.test(part));
   const chosen = useful.slice(0, maxSentences);
