@@ -22,6 +22,7 @@ import { parsePastedListing } from "./intake";
 import { blobConfiguration, normalizeEtag } from "./blob-store";
 import {
   categorizeDeal,
+  dealMatchesSearch,
   ensureDealClassification,
   operatingStyleFor,
 } from "./classification";
@@ -493,6 +494,33 @@ describe("TESIM business categories and company-specific brief", () => {
     expect(deal.operatingStyleTags).toEqual(["Hands-off"]);
     expect(deal.id).toBe("finish");
     expect(ensureDealClassification(deal)).toBe(false);
+  });
+
+  it("searches deal identity and tags case-insensitively with normalized spaces", () => {
+    const deal = baseDeal();
+    deal.name = "Uniquecoat Technologies, LLC";
+    deal.industry = "Industrial technology / thermal spray systems";
+    deal.location = "Richmond, VA";
+    deal.state = "VA";
+    deal.broker = "Example Broker";
+    deal.source = "Austin Thorpe workbook";
+    ensureDealClassification(deal);
+
+    expect(dealMatchesSearch(deal, "  UNIQUECOAT  ")).toBe(true);
+    expect(dealMatchesSearch(deal, "painting   / coatings")).toBe(true);
+    expect(dealMatchesSearch(deal, "hands-on")).toBe(true);
+    expect(dealMatchesSearch(deal, "richmond")).toBe(true);
+    expect(dealMatchesSearch(deal, "example broker")).toBe(true);
+    expect(dealMatchesSearch(deal, "austin thorpe")).toBe(true);
+    expect(dealMatchesSearch(deal, "")).toBe(true);
+    expect(dealMatchesSearch(deal, "gas")).toBe(false);
+
+    const gas = baseDeal();
+    gas.name = "East Texas portfolio";
+    gas.industry = "Gas stations / C-stores";
+    ensureDealClassification(gas);
+    expect(dealMatchesSearch(gas, "gas")).toBe(true);
+    expect(dealMatchesSearch(gas, "hands-off")).toBe(true);
   });
 });
 

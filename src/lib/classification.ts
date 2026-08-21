@@ -151,3 +151,34 @@ export function ensureStoreClassifications(deals: Deal[]): boolean {
     false
   );
 }
+
+export function normalizeDealSearch(value: string) {
+  return value.toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+export function dealMatchesSearch(deal: Deal, query: string) {
+  const needle = normalizeDealSearch(query);
+  if (!needle) return true;
+  const category = deal.businessCategory || categorizeDeal(deal);
+  const classification = {
+    businessCategory: category,
+    operatingStyleTags:
+      deal.operatingStyleTags ||
+      [operatingStyleFor(deal, category)],
+  };
+  const haystack = normalizeDealSearch(
+    [
+      deal.name,
+      deal.industry,
+      classification.businessCategory,
+      deal.location,
+      deal.state,
+      deal.broker,
+      deal.source,
+      ...classification.operatingStyleTags,
+    ]
+      .filter(Boolean)
+      .join(" ")
+  );
+  return haystack.includes(needle);
+}

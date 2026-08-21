@@ -15,6 +15,7 @@ import {
   BUSINESS_CATEGORIES,
   OPERATING_STYLES,
   classifyDeal,
+  dealMatchesSearch,
 } from "@/lib/classification";
 
 type Persistence = { durable: boolean; note: string; error?: string };
@@ -25,6 +26,7 @@ export default function RankingPage() {
   const [failure, setFailure] = useState<string | null>(null);
   const [researching, setResearching] = useState(false);
   const [bestOnly, setBestOnly] = useState(false);
+  const [query, setQuery] = useState("");
   const [filters, setFilters] = useState({
     call: "all",
     category: "all",
@@ -113,10 +115,13 @@ export default function RankingPage() {
         (deal) => dealFunnelStep(deal) === Number(filters.step)
       );
     }
+    if (query.trim()) {
+      list = list.filter((deal) => dealMatchesSearch(deal, query));
+    }
     return list.sort(
       (a, b) => (brokerScreen(b).score || 0) - (brokerScreen(a).score || 0)
     );
-  }, [deals, bestOnly, filters]);
+  }, [deals, bestOnly, filters, query]);
 
   return (
     <div className="space-y-6">
@@ -160,6 +165,45 @@ export default function RankingPage() {
           )}
         </div>
       )}
+
+      <div className="card rounded-2xl p-4">
+        <label
+          htmlFor="deal-search"
+          className="block text-sm font-semibold text-[var(--navy)]"
+        >
+          Search the deal board
+        </label>
+        <div className="mt-2 flex items-center gap-2">
+          <input
+            id="deal-search"
+            type="search"
+            autoComplete="off"
+            placeholder="Company, industry, category, location, broker, source, or hands-off…"
+            className="w-full rounded-xl border border-[var(--line)] bg-white px-4 py-3 text-base outline-none focus:border-[var(--navy)] focus:ring-2 focus:ring-blue-100"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") {
+                event.preventDefault();
+                setQuery("");
+              }
+            }}
+          />
+          {query && (
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={() => setQuery("")}
+            >
+              Clear
+            </button>
+          )}
+        </div>
+        <p className="mt-2 text-xs text-[var(--muted)]">
+          Searches names, industries, categories, locations, brokers, sources,
+          and operating-style tags as you type.
+        </p>
+      </div>
 
       <div className="card flex flex-wrap gap-3 rounded-2xl p-4 text-sm">
         <select
@@ -262,6 +306,18 @@ export default function RankingPage() {
             </tr>
           </thead>
           <tbody>
+            {ranked.length === 0 && (
+              <tr>
+                <td
+                  colSpan={12}
+                  className="px-6 py-12 text-center text-[var(--muted)]"
+                >
+                  {query.trim()
+                    ? `No companies match ‘${query.trim()}’.`
+                    : "No companies match the current filters."}
+                </td>
+              </tr>
+            )}
             {ranked.map((deal, index) => {
               const earnings = deal.sde || deal.ebitda;
               const askingMultiple = multiple(deal.askingPrice, earnings);
