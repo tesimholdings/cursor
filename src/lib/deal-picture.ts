@@ -10,7 +10,7 @@ import { money, multiple } from "./format";
 import { headlineScore } from "./board-scoring";
 import type { Deal, DealPicture, DealPictureFact, DocumentRecord } from "./types";
 
-export const DEAL_PICTURE_VERSION = 6;
+export const DEAL_PICTURE_VERSION = 7;
 
 const BUSINESS_HINT =
   /\b(provides?|manufactur|sells?|specializ|serves?|produces?|offers?|operat|designs?|installs?|customers?|revenue|employees?|injection|thermal spray|landscap|contractor|general contractor|hvaf|powder feeder)\b/i;
@@ -96,19 +96,12 @@ const SHOP_LINES: Array<{ pattern: RegExp; sell: string; pay?: string }> = [
   },
 ];
 
-function shopLocation(deal: Deal, text: string) {
-  const printed = text.match(
-    /\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?),\s*(VA|TX|MD|WA|OH|FL|NC|SC|GA|PA|NY|CA)\b/
-  );
-  if (printed) return `The shop runs in ${printed[1]}, ${printed[2]}.`;
-  if (deal.location) return `The shop runs in ${deal.location}.`;
-  return "";
+function shopLocation(deal: Deal) {
+  if (!deal.location) return "";
+  return `The shop runs in ${deal.location}.`;
 }
 
 function uglyLine(text: string) {
-  if (/inventor|founder.{0,40}key|key[-\s]?person/i.test(text)) {
-    return "Ugly: founder-inventor key-person, not a plant hall.";
-  }
   if (/customer[\s-]owned (?:molds?|tooling)|customers own their patented molds/i.test(text)) {
     return "Ugly: customer-owned molds / tooling.";
   }
@@ -118,6 +111,9 @@ function uglyLine(text: string) {
     )
   ) {
     return "Ugly: government / public-sector work — Slow close.";
+  }
+  if (/\binventor\b/i.test(text) && /\bfound(?:er|ed)\b/i.test(text)) {
+    return "Ugly: founder-inventor key-person, not a plant hall.";
   }
   if (/franchise/i.test(text)) return "Ugly: franchise language is in the file.";
   return "";
@@ -165,7 +161,7 @@ export function composeShopSummary(deal: Deal, maxSentences = 3) {
     }
     return { summary: "", parsed: false, ugly: uglyLine(text) };
   }
-  const location = shopLocation(deal, text);
+  const location = shopLocation(deal);
   const ugly = uglyLine(text);
   const parts = match
     ? [match.sell, match.pay, location].filter(Boolean)
@@ -213,32 +209,52 @@ function toAmount(raw: string, suffix?: string) {
   return value;
 }
 
-function labeledAmounts(text: string, labels: string[]) {
-  const found: number[] = [];
+function labeledAmounts(
+  text: string,
+  labels: string[],
+  kind: "rev" | "sde" | "ask" | "ebitda"
+) {
+  const found: Array<{ value: number; score: number }> = [];
   const label = labels.join("|");
   const after = new RegExp(
     `(?:${label})[^\\d$%]{0,28}\\$\\s*([0-9][0-9,]*(?:\\.\\d+)?)\\s*(m|million|k)?`,
     "gi"
   );
   const before = new RegExp(
-    `\\$\\s*([0-9][0-9,]*(?:\\.\\d+)?)\\s*(m|million|k)?[^$.]{0,40}(?:${label})`,
+    `\\$\\s*([0-9][0-9,]*(?:\\.\\d+)?)\\s*(m|million|k)?[^$.]{0,32}(?:${label})`,
     "gi"
   );
-  for (const match of text.matchAll(before)) {
-    const value = toAmount(match[1], match[2]);
-    if (value >= 10_000) found.push(value);
-  }
+  const push = (value: number, slice: string, preferAfter: boolean) => {
+    if (value < 10_000) return;
+    let score = preferAfter ? 2 : 0;
+    if (kind === "rev" && /trailing 3|t3 avg|ttm|annual revenue/i.test(slice)) score += 6;
+    if (kind === "sde" && /trailing 3|t3 avg|discretionary|adjusted sde/i.test(slice)) score += 6;
+    if (kind === "ask" && /asking price|sale price of|asset sale for/i.test(slice)) score += 6;
+    if (kind !== "rev" && /\brevenue\b/i.test(slice)) score -= 5;
+    if (kind !== "sde" && /\bsde\b|discretionary/i.test(slice)) score -= 5;
+    if (kind === "ask" && /finance|of the sale price/i.test(slice)) score -= 8;
+    if (kind === "sde" && /\brevenue\b/i.test(slice)) score -= 6;
+    found.push({ value, score });
+  };
   for (const match of text.matchAll(after)) {
-    const value = toAmount(match[1], match[2]);
-    if (value >= 10_000) found.push(value);
+    push(toAmount(match[1], match[2]), match[0], true);
   }
-  return found;
+  for (const match of text.matchAll(before)) {
+    push(toAmount(match[1], match[2]), match[0], false);
+  }
+  return found.sort((a, b) => b.score - a.score);
 }
 
-function locateMoney(text: string, labels: string[], exclude: number[] = []) {
+function locateMoney(
+  text: string,
+  labels: string[],
+  kind: "rev" | "sde" | "ask" | "ebitda",
+  exclude: number[] = []
+) {
   return (
-    labeledAmounts(text, labels).find((value) => !exclude.includes(value)) ??
-    null
+    labeledAmounts(text, labels, kind).find(
+      (item) => !exclude.includes(item.value) && item.score > 0
+    )?.value ?? null
   );
 }
 
@@ -261,14 +277,18 @@ export function buildDealPicture(deal: Deal): DealPicture {
     text
   );
 
-  const packetSde = locateMoney(cimText, [
-    "trailing 3[\\s-]*year avg(?:erage)? sde",
-    "t3 avg sde",
-    "seller.?s discretionary",
-    "seller discretionary",
-    "adjusted sde",
-    "\\bsde\\b",
-  ]);
+  const packetSde = locateMoney(
+    cimText,
+    [
+      "trailing 3[\\s-]*year avg(?:erage)? sde",
+      "t3 avg sde",
+      "seller.?s discretionary",
+      "seller discretionary",
+      "adjusted sde",
+      "\\bsde\\b",
+    ],
+    "sde"
+  );
   const packetRev = locateMoney(
     cimText,
     [
@@ -278,17 +298,23 @@ export function buildDealPicture(deal: Deal): DealPicture {
       "annual revenue",
       "\\brevenue\\b",
     ],
+    "rev",
     packetSde != null ? [packetSde] : []
   );
-  const packetAsk = locateMoney(cimText, [
-    "asking price",
-    "sale price",
-    "purchase price",
-  ]);
-  const packetEbitda = locateMoney(cimText, ["\\bebitda\\b"], [
-    ...(packetSde != null ? [packetSde] : []),
-    ...(packetRev != null ? [packetRev] : []),
-  ]);
+  const packetAsk = locateMoney(
+    cimText,
+    ["asking price", "sale price of", "asset sale for a sale price"],
+    "ask"
+  );
+  const packetEbitda = locateMoney(
+    cimText,
+    ["\\bebitda\\b"],
+    "ebitda",
+    [
+      ...(packetSde != null ? [packetSde] : []),
+      ...(packetRev != null ? [packetRev] : []),
+    ]
+  );
   const ask = packetAsk ?? deal.askingPrice ?? null;
   const earnings = packetSde ?? packetEbitda ?? deal.sde ?? deal.ebitda ?? null;
   const askMultiple = multiple(ask, earnings);

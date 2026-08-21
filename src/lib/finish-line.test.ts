@@ -1384,7 +1384,7 @@ describe("deal PATCH persist and seed hide", () => {
     applyDealPatch(deal, {
       notes: "Keep this note.",
       dealPicture: {
-        version: 6,
+        version: 7,
         status: "from_cim",
         summary: "They sell HVAF spray systems and powder feeders.",
         facts: [],
