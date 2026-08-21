@@ -10,7 +10,7 @@ import { money, multiple } from "./format";
 import { headlineScore } from "./board-scoring";
 import type { Deal, DealPicture, DealPictureFact, DocumentRecord } from "./types";
 
-export const DEAL_PICTURE_VERSION = 4;
+export const DEAL_PICTURE_VERSION = 5;
 
 const BUSINESS_HINT =
   /\b(provides?|manufactur|sells?|specializ|serves?|produces?|offers?|operat|designs?|installs?|customers?|revenue|employees?|injection|thermal spray|landscap|contractor|general contractor)\b/i;
@@ -37,6 +37,17 @@ function documentText(document: DocumentRecord) {
       readableDocumentText(document.extraction?.chunks || [])
     ).replace(/\s+/g, " ")
   ).trim();
+}
+
+function isHeaderJunk(part: string) {
+  const compact = part.replace(/\s+/g, "");
+  if (/confidentialinformation|tableofcontents|preparedforqualifiedbuyers/i.test(compact)) {
+    return true;
+  }
+  if (/^confidential/i.test(part) && !BUSINESS_HINT.test(part)) return true;
+  const letters = part.replace(/[^A-Za-z]/g, "");
+  const caps = part.replace(/[^A-Z]/g, "");
+  return letters.length > 20 && caps.length / letters.length > 0.55;
 }
 
 export function isPlaceholderCim(text: string) {
@@ -94,14 +105,14 @@ export function cimProse(deal: Deal, maxSentences = 4) {
   const raw = packetText(deal, ["cim"]);
   if (!raw || isPlaceholderCim(raw)) return listingProse(deal, maxSentences);
   const parts = raw
-    .split(/(?<=[.!?])\s+|\n+/)
+    .split(/(?<=[.!?])\s+|\n+|SECTION\s+[IVX]+|Executive Summary/i)
     .map((part) => part.replace(/\s+/g, " ").trim())
     .filter(
       (part) =>
         part.length >= 40 &&
         part.length <= 480 &&
         !SKIP_PROSE.test(part) &&
-        !/^confidential\b/i.test(part)
+        !isHeaderJunk(part)
     );
   const useful = parts.filter((part) => BUSINESS_HINT.test(part));
   const chosen = useful.slice(0, maxSentences);

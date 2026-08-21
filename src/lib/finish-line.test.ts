@@ -1192,7 +1192,7 @@ describe("CIM deal picture and tight copy", () => {
     });
     const picture = buildDealPicture(deal);
     expect(picture.summary).toMatch(/HVAF thermal spray/i);
-    expect(picture.summary).not.toMatch(/C O N F I D E N T I A L/);
+    expect(picture.summary).not.toMatch(/C O N F I D E N T I A L|CONFIDENTIAL/i);
   });
 
   it("skips CIM disclaimer pages and uses the operating description", () => {
