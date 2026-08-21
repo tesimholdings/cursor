@@ -22,7 +22,17 @@ type ImportableDeal = Omit<
 >;
 
 const ALIASES: Record<string, string[]> = {
-  name: ["company", "company name", "name", "business", "listing name"],
+  name: [
+    "company",
+    "company name",
+    "name",
+    "business",
+    "business name",
+    "listing name",
+    "listing title",
+    "opportunity",
+    "opportunity name",
+  ],
   listingUrl: ["listing url", "url", "link", "listing"],
   websiteUrl: ["website", "company website", "business website", "website url"],
   industry: ["industry", "sector", "naics", "category"],
@@ -63,49 +73,163 @@ export async function parseSpreadsheet(
   buffer: Buffer,
   fileName = "upload.xlsx"
 ): Promise<ImportableDeal[]> {
-  const rows = fileName.toLowerCase().endsWith(".csv")
-    ? csvRows(buffer)
-    : await workbookRows(buffer);
-  return rows
-    .map(toImportableDeal)
-    .filter((row): row is ImportableDeal => Boolean(row));
+  if (fileName.toLowerCase().endsWith(".csv")) {
+    return dealsFromGrid(csvGrid(buffer));
+  }
+  return workbookDeals(buffer);
 }
 
-function csvRows(buffer: Buffer): Record<string, unknown>[] {
+function csvGrid(buffer: Buffer): unknown[][] {
   return parseCsv(buffer.toString("utf8"), {
-    columns: true,
     skip_empty_lines: true,
     trim: true,
     bom: true,
     relax_column_count: true,
-  }) as Record<string, unknown>[];
+  }) as unknown[][];
 }
 
-async function workbookRows(
-  buffer: Buffer
-): Promise<Record<string, unknown>[]> {
+interface SheetCandidate {
+  deals: ImportableDeal[];
+  mappedColumns: number;
+  listHints: number;
+  likelyDealList: boolean;
+  sheetIndex: number;
+}
+
+const DEAL_SHEET_HINT =
+  /\b(deals?|listings?|opportunit(?:y|ies)|scorecards?|targets?|pipeline|acquisitions?)\b/i;
+const LIST_COLUMN_HINT =
+  /\b(score|rank|decision|status|stage|recommendation|broker call)\b/i;
+
+async function workbookDeals(buffer: Buffer): Promise<ImportableDeal[]> {
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.load(buffer as unknown as ExcelJS.Buffer);
-  const worksheet = workbook.worksheets[0];
-  if (!worksheet) return [];
-  const headers: string[] = [];
-  worksheet.getRow(1).eachCell({ includeEmpty: true }, (cell, column) => {
-    headers[column] = cellText(cell.value);
-  });
-  const rows: Record<string, unknown>[] = [];
-  worksheet.eachRow((row, rowNumber) => {
-    if (rowNumber === 1) return;
-    const record: Record<string, unknown> = {};
-    let hasValue = false;
-    headers.forEach((header, column) => {
-      if (!header) return;
-      const value = primitiveCell(row.getCell(column).value);
-      if (value != null && String(value).trim() !== "") hasValue = true;
-      record[header] = value ?? "";
+  const candidates = workbook.worksheets
+    .map((worksheet, sheetIndex) => {
+      const grid: unknown[][] = [];
+      worksheet.eachRow({ includeEmpty: false }, (row) => {
+        const values: unknown[] = [];
+        row.eachCell({ includeEmpty: true }, (cell, column) => {
+          values[column - 1] = primitiveCell(cell.value);
+        });
+        grid.push(values);
+      });
+      const parsed = bestGridCandidate(grid);
+      if (!parsed) return null;
+      return {
+        ...parsed,
+        likelyDealList: DEAL_SHEET_HINT.test(worksheet.name),
+        sheetIndex,
+      } satisfies SheetCandidate;
+    })
+    .filter((candidate): candidate is SheetCandidate => Boolean(candidate));
+
+  // A broker workbook commonly has a cover/analysis sheet followed by one
+  // actual listings table. Importing every sheet risks turning a named
+  // company's supporting financial tab into another company. Choose the
+  // strongest company-list table. A clearly named listings/scorecard sheet
+  // wins first. Otherwise recognized listing columns and table-oriented score
+  // headers keep a large generic "Name" table (for example an employee list)
+  // from outranking an actual broker list.
+  candidates.sort(
+    (a, b) =>
+      Number(b.likelyDealList) - Number(a.likelyDealList) ||
+      candidateStrength(b) - candidateStrength(a) ||
+      a.sheetIndex - b.sheetIndex
+  );
+  return candidates[0]?.deals ?? [];
+}
+
+function candidateStrength(candidate: {
+  deals: ImportableDeal[];
+  mappedColumns: number;
+  listHints: number;
+}) {
+  return (
+    candidate.mappedColumns * 100 +
+    candidate.listHints * 50 +
+    Math.min(candidate.deals.length, 99)
+  );
+}
+
+interface HeaderMatch {
+  rowIndex: number;
+  headers: string[];
+  mappedColumns: number;
+  listHints: number;
+}
+
+function findHeaders(grid: unknown[][]): HeaderMatch[] {
+  const matches: HeaderMatch[] = [];
+  // Limit pathological formatted workbooks while allowing substantial cover
+  // material before the table. Empty rows are omitted from workbook grids.
+  const scanLimit = Math.min(grid.length, 200);
+  for (let rowIndex = 0; rowIndex < scanLimit; rowIndex += 1) {
+    const headers = grid[rowIndex].map((value) =>
+      String(primitiveCell(value as ExcelJS.CellValue) ?? "").trim()
+    );
+    const mapped = headers.map(mapHeader);
+    if (!mapped.includes("name")) continue;
+    // A single title cell such as "Company" is not enough evidence of a table.
+    // Real scorecards may have only one recognized field, but still have score
+    // or rank columns beside the name.
+    if (headers.filter(Boolean).length < 2) continue;
+    matches.push({
+      rowIndex,
+      headers,
+      mappedColumns: new Set(mapped.filter(Boolean)).size,
+      listHints: headers.filter((header) => LIST_COLUMN_HINT.test(header)).length,
     });
-    if (hasValue) rows.push(record);
-  });
+  }
+  return matches;
+}
+
+function dealsForHeader(
+  grid: unknown[][],
+  header: HeaderMatch
+): ImportableDeal[] {
+  const rows: ImportableDeal[] = [];
+  for (const values of grid.slice(header.rowIndex + 1)) {
+    const record: Record<string, unknown> = {};
+    header.headers.forEach((columnName, index) => {
+      if (columnName) record[columnName] = values[index] ?? "";
+    });
+    const deal = toImportableDeal(record);
+    // Repeated headers inside a long sheet are separators, not companies.
+    if (deal && mapHeader(deal.name) !== "name") rows.push(deal);
+  }
   return rows;
+}
+
+function bestGridCandidate(
+  grid: unknown[][]
+): Omit<SheetCandidate, "sheetIndex" | "likelyDealList"> | null {
+  const candidates = findHeaders(grid)
+    .map((header) => ({
+      deals: dealsForHeader(grid, header),
+      mappedColumns: header.mappedColumns,
+      listHints: header.listHints,
+      rowIndex: header.rowIndex,
+    }))
+    .filter((candidate) => candidate.deals.length);
+  candidates.sort(
+    (a, b) =>
+      candidateStrength(b) - candidateStrength(a) ||
+      // Later wins an otherwise exact tie because title/cover material appears
+      // before the real table.
+      b.rowIndex - a.rowIndex
+  );
+  const best = candidates[0];
+  if (!best) return null;
+  return {
+    deals: best.deals,
+    mappedColumns: best.mappedColumns,
+    listHints: best.listHints,
+  };
+}
+
+function dealsFromGrid(grid: unknown[][]): ImportableDeal[] {
+  return bestGridCandidate(grid)?.deals ?? [];
 }
 
 function toImportableDeal(
@@ -170,10 +294,6 @@ function primitiveCell(
     return value.richText.map((part) => part.text).join("");
   if ("hyperlink" in value) return String(value.hyperlink);
   return String(value);
-}
-
-function cellText(value: ExcelJS.CellValue) {
-  return String(primitiveCell(value) ?? "").trim();
 }
 
 export function toDeal(row: ImportableDeal, batchId: string): Deal {

@@ -94,6 +94,83 @@ describe("document extraction", () => {
     });
   });
 
+  it("finds a titled company table on a later workbook sheet", async () => {
+    const workbook = new ExcelJS.Workbook();
+    workbook.addWorksheet("Cover").addRows([
+      ["Austin Thorpe confidential listing book"],
+      ["Prepared for review"],
+    ]);
+    workbook.addWorksheet("Company Analysis").addRows([
+      ["Company Name", "Metric", "Value"],
+      ["Supporting Company LLC", "Inventory", 900_000],
+    ]);
+    workbook.addWorksheet("Listings").addRows([
+      ["Company", "Confidential listing book"],
+      ["Seller-provided; subject to diligence"],
+      [],
+      [
+        "Company / Name",
+        "Asking Price",
+        "Revenue",
+        "SDE",
+        "EBITDA",
+        "Projected Revenue",
+      ],
+      ["Alpha Services", 5_100_000, 4_000_000, 900_000, "", 8_000_000],
+      ["Bravo Markets", 6_200_000, 5_000_000, "", 700_000, 9_000_000],
+      ["Charlie Supply", "", "", "", "", 10_000_000],
+      ["Delta Works", "", "", "", "", 11_000_000],
+      ["Echo Industrial", "", "", "", "", 12_000_000],
+      ["Foxtrot Retail", "", "", "", "", 13_000_000],
+    ]);
+    const bytes = await workbook.xlsx.writeBuffer();
+
+    const rows = await parseSpreadsheet(
+      Buffer.from(bytes),
+      "broker-scorecard.xlsm"
+    );
+
+    expect(rows).toHaveLength(6);
+    expect(rows.map((row) => row.name)).toEqual([
+      "Alpha Services",
+      "Bravo Markets",
+      "Charlie Supply",
+      "Delta Works",
+      "Echo Industrial",
+      "Foxtrot Retail",
+    ]);
+    expect(rows).not.toContainEqual(
+      expect.objectContaining({ name: "Supporting Company LLC" })
+    );
+    expect(rows[0]).toMatchObject({
+      askingPrice: 5_100_000,
+      revenue: 4_000_000,
+      sde: 900_000,
+      ebitda: null,
+    });
+    expect(rows[1]).toMatchObject({
+      askingPrice: 6_200_000,
+      revenue: 5_000_000,
+      sde: null,
+      ebitda: 700_000,
+    });
+    // "Projected Revenue" is intentionally not a mapped seller-claim column.
+    expect(rows[2]?.revenue).toBeNull();
+  });
+
+  it("requires an explicit name column after title rows", async () => {
+    const bytes = await workbookBuffer("Analysis", [
+      ["Named Company LLC"],
+      ["Revenue", 5_000_000],
+      ["SDE", 1_000_000],
+    ]);
+    const rows = await parseSpreadsheet(
+      Buffer.from(bytes),
+      "single-company-analysis.xlsx"
+    );
+    expect(rows).toEqual([]);
+  });
+
   it("returns a hard failure for an unreadable PDF", async () => {
     const result = await extractDocument(
       "broken.pdf",
