@@ -11,6 +11,7 @@ import { Play } from "lucide-react";
 type Payload = Store & {
   funnel: { label: string; value: number }[];
   research: { total: number; done: number; running: number; pending: number };
+  persistence?: { durable: boolean; note: string };
 };
 
 export function DashboardClient() {
@@ -82,6 +83,12 @@ export function DashboardClient() {
           </button>
         </div>
       </div>
+
+      {data.persistence && !data.persistence.durable && (
+        <div className="rounded-2xl bg-amber-100 px-5 py-3 text-sm text-amber-950">
+          <strong>Preview storage.</strong> {data.persistence.note}
+        </div>
+      )}
 
       <div className="card rounded-2xl px-5 py-4">
         <div className="flex flex-wrap items-center justify-between gap-3">

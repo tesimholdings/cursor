@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { readStore } from "@/lib/store";
+import { readStore, storePersistence } from "@/lib/store";
 import { funnel, researchProgress } from "@/lib/pipeline";
 
 export const dynamic = "force-dynamic";
@@ -12,5 +12,6 @@ export async function GET() {
     batches: store.batches,
     funnel: funnel(store.deals),
     research: researchProgress(store),
+    persistence: storePersistence(),
   });
 }

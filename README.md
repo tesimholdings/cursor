@@ -37,6 +37,33 @@ Asset/downside 10, Deal structure 10, Tax 10, and Legal/environmental 5.
 Fatal risks override the total. Seller-recast SDE/EBITDA is never treated as
 verified, and tax benefits cannot rescue weak economics.
 
+## Publish a shareable preview
+
+Run this from the repository root, on the branch you want to share:
+
+```bash
+npx vercel@latest deploy
+```
+
+On the first run it prompts you to log in (GitHub is fine) and to confirm the
+project. It then prints the public preview URL. Add `--prod` instead if you want
+a stable URL that does not change on every deploy.
+
+To get preview URLs automatically on every push, add three repository secrets
+under **Settings → Secrets and variables → Actions**: `VERCEL_TOKEN`,
+`VERCEL_ORG_ID`, and `VERCEL_PROJECT_ID`. The included
+`.github/workflows/preview.yml` stays green and skips deploying until all three
+exist, then comments the preview URL on the open pull request.
+
+Hosted notes:
+
+- Serverless filesystems are read-only, so deal data is kept in memory and
+  resets when the instance recycles. The dashboard shows a banner when storage
+  is not durable. Set `ACC_DATA_DIR` to a writable, persistent path for durable
+  storage.
+- Search and AI synthesis stay off until their keys are set in the Vercel
+  project's environment variables.
+
 ## Run locally
 
 ```bash
