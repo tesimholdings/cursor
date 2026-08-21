@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@ai-sdk/openai": "^4.0.45",
+    "@napi-rs/canvas": "^1.0.7",
     "@vercel/blob": "^2.8.0",
     "@vercel/oidc": "^3.8.5",
     "ai": "^7.0.71",

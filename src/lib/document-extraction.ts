@@ -50,6 +50,7 @@ export async function extractDocument(
 }
 
 async function extractPdf(buffer: Buffer): Promise<DocumentExtraction> {
+  await ensurePdfGlobals();
   const { getDocument } = await import("pdfjs-dist/legacy/build/pdf.mjs");
   const loadingTask = getDocument({
     data: new Uint8Array(buffer),
@@ -81,6 +82,22 @@ async function extractPdf(buffer: Buffer): Promise<DocumentExtraction> {
     );
   }
   return complete(chunks);
+}
+
+async function ensurePdfGlobals() {
+  const runtime = globalThis as typeof globalThis & {
+    DOMMatrix?: typeof DOMMatrix;
+    Path2D?: typeof Path2D;
+    ImageData?: typeof ImageData;
+  };
+  if (runtime.DOMMatrix && runtime.Path2D && runtime.ImageData) return;
+  // pdfjs normally loads this optional dependency itself. Vercel's external
+  // module path can prevent that transitive require from being traced, so make
+  // the dependency explicit and install the same Node canvas globals first.
+  const canvas = await import("@napi-rs/canvas");
+  runtime.DOMMatrix ??= canvas.DOMMatrix as unknown as typeof DOMMatrix;
+  runtime.Path2D ??= canvas.Path2D as unknown as typeof Path2D;
+  runtime.ImageData ??= canvas.ImageData as unknown as typeof ImageData;
 }
 
 async function extractWorkbook(

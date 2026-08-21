@@ -96,7 +96,19 @@ export async function POST(
     const attached = await updateStore((store) => {
       const deal = store.deals.find((candidate) => candidate.id === dealId);
       if (!deal) return null;
-      deal.documents.push(...documents);
+      for (const document of documents) {
+        const replaceIndex = deal.documents.findIndex(
+          (existingDocument) =>
+            existingDocument.name === document.name &&
+            existingDocument.size === document.size &&
+            existingDocument.category === document.category
+        );
+        if (replaceIndex >= 0) {
+          deal.documents[replaceIndex] = document;
+        } else {
+          deal.documents.push(document);
+        }
+      }
       if (category === "cim") {
         deal.packet = analyzePacket(deal, "", deal.documents);
         applyPacketAssignments(deal);
