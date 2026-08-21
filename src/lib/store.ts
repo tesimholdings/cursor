@@ -68,7 +68,9 @@ export function storePersistence(): StorePersistence {
     note: !writable
       ? "Deal data is held in memory only because this filesystem is read-only. Uploads and screens reset when the instance recycles."
       : EPHEMERAL_DIR
-        ? "Deal data is written to this instance's temporary storage. Uploads and screens reset on redeploy or when the instance recycles. Set ACC_DATA_DIR to a persistent path to keep them."
+        ? process.env.VERCEL
+          ? "Vercel Blob is not connected to this project. Each serverless instance has its own temporary copy, so a company you just added can vanish on refresh. Create a private Blob store named acquisition-command-center-data, connect Preview and Production, and redeploy."
+          : "Deal data is written to this instance's temporary storage. Uploads and screens reset on redeploy or when the instance recycles."
         : "Deal data is written to disk and survives restarts.",
     error: lastPersistError,
     configuration: blob,

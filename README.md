@@ -112,4 +112,6 @@ npm run build
 
 ## Stack
 
-Next.js (App Router), TypeScript, Tailwind CSS, file-backed JSON store in `data/store.json`.
+Next.js (App Router), TypeScript, Tailwind CSS, and a JSON deal store. Locally
+that store is `data/store.json`. On Vercel it is a private Blob object once the
+store is connected; until then each function uses ephemeral `/tmp`.

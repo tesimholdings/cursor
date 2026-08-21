@@ -14,6 +14,10 @@ import {
 
 export default function RankingPage() {
   const [deals, setDeals] = useState<Deal[]>([]);
+  const [persistence, setPersistence] = useState<{
+    durable: boolean;
+    note: string;
+  } | null>(null);
   const [researching, setResearching] = useState(false);
   const [bestOnly, setBestOnly] = useState(false);
   const [filters, setFilters] = useState({
@@ -33,6 +37,7 @@ export default function RankingPage() {
           const payload = await response.json();
           if (cancelled) return;
           setDeals(payload.deals || []);
+          setPersistence(payload.persistence || null);
           if (!payload.research?.pending) return;
           const research = await fetch("/api/research", {
             method: "POST",
@@ -109,6 +114,12 @@ export default function RankingPage() {
           </button>
         </div>
       </div>
+
+      {persistence && !persistence.durable && (
+        <div className="rounded-2xl bg-amber-100 px-5 py-3 text-sm text-amber-950">
+          <strong>Storage is not shared yet.</strong> {persistence.note}
+        </div>
+      )}
 
       <div className="card flex flex-wrap gap-3 rounded-2xl p-4 text-sm">
         <select

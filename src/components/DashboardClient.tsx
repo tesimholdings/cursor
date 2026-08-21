@@ -86,7 +86,7 @@ export function DashboardClient() {
 
       {data.persistence && !data.persistence.durable && (
         <div className="rounded-2xl bg-amber-100 px-5 py-3 text-sm text-amber-950">
-          <strong>Preview storage.</strong> {data.persistence.note}
+          <strong>Storage is not shared yet.</strong> {data.persistence.note}
         </div>
       )}
 

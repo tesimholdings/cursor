@@ -6,12 +6,15 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   const store = await readStore();
-  return NextResponse.json({
-    deals: store.deals,
-    teams: store.teams,
-    batches: store.batches,
-    funnel: funnel(store.deals),
-    research: researchProgress(store),
-    persistence: storePersistence(),
-  });
+  return NextResponse.json(
+    {
+      deals: store.deals,
+      teams: store.teams,
+      batches: store.batches,
+      funnel: funnel(store.deals),
+      research: researchProgress(store),
+      persistence: storePersistence(),
+    },
+    { headers: { "Cache-Control": "no-store" } }
+  );
 }
