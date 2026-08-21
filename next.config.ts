@@ -8,6 +8,9 @@ const nextConfig: NextConfig = {
     "pdfjs-dist",
     "cheerio",
   ],
+  outputFileTracingIncludes: {
+    "/*": ["./node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs"],
+  },
   experimental: {
     serverActions: {
       bodySizeLimit: "32mb",
