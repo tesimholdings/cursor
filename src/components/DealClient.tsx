@@ -13,6 +13,7 @@ import { EvidenceBadge, TrafficDot } from "@/components/EvidenceBadge";
 import { ScoreRing } from "@/components/ScoreRing";
 import { resolveAssigneeName } from "@/lib/assign";
 import { OwnerQuestionsPanel } from "@/components/OwnerQuestionsPanel";
+import { classifyDeal } from "@/lib/classification";
 
 export function DealClient({ id }: { id: string }) {
   const [deal, setDeal] = useState<Deal | null>(null);
@@ -81,6 +82,12 @@ export function DealClient({ id }: { id: string }) {
   const broker = brokerScreen(deal);
   const fullIcReady = canRunFullIc(deal);
   const funnelStep = dealFunnelStep(deal);
+  const classification = {
+    businessCategory:
+      deal.businessCategory || classifyDeal(deal).businessCategory,
+    operatingStyleTags:
+      deal.operatingStyleTags || classifyDeal(deal).operatingStyleTags,
+  };
 
   return (
     <div className="space-y-6">
@@ -109,6 +116,19 @@ export function DealClient({ id }: { id: string }) {
             {deal.industry} · {deal.location} · Ask {money(deal.askingPrice)} · Revenue {money(deal.revenue)} · SDE{" "}
             {money(deal.sde)}
           </p>
+          <div className="mt-3 flex flex-wrap gap-2 text-xs font-semibold">
+            <span className="rounded-full bg-slate-100 px-3 py-1 text-slate-800">
+              {classification.businessCategory}
+            </span>
+            {classification.operatingStyleTags.map((tag) => (
+              <span
+                key={tag}
+                className="rounded-full bg-blue-100 px-3 py-1 text-blue-900"
+              >
+                {tag}
+              </span>
+            ))}
+          </div>
         </div>
         <div className="flex items-center gap-4">
           {(s || o) && (
@@ -234,7 +254,7 @@ export function DealClient({ id }: { id: string }) {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <div className="kicker">Original broker screen</div>
-            <h2 className="serif text-2xl">Good / Bad / Ugly</h2>
+            <h2 className="serif text-2xl">Good / Bad / Interesting</h2>
           </div>
           <div className="text-right">
             <div className="serif text-3xl">
@@ -245,9 +265,13 @@ export function DealClient({ id }: { id: string }) {
           </div>
         </div>
         <div className="mt-4 grid gap-3 md:grid-cols-3">
-          <ScreenSummary title="Good" tone="good" text={broker.good} />
-          <ScreenSummary title="Bad" tone="bad" text={broker.bad} />
-          <ScreenSummary title="Ugly" tone="ugly" text={broker.ugly} />
+          <ScreenSummary title="Good" tone="good" items={broker.good} />
+          <ScreenSummary title="Bad" tone="bad" items={broker.bad} />
+          <ScreenSummary
+            title="Interesting"
+            tone="interesting"
+            items={broker.interesting}
+          />
         </div>
       </section>
 
@@ -271,13 +295,17 @@ export function DealClient({ id }: { id: string }) {
       />
 
       {o && (
-        <OwnerQuestionsPanel report={o} research={deal.publicResearch} />
+        <OwnerQuestionsPanel
+          deal={deal}
+          report={o}
+          research={deal.publicResearch}
+        />
       )}
 
       {s && (
-        <details open className="card rounded-2xl p-5">
+        <details className="card rounded-2xl p-5">
           <summary className="serif cursor-pointer text-2xl">
-            Step 1B — Normal listing / public financial screen
+            Full Step 1B Q&amp;A — listing / public financial screen
           </summary>
           <p className="mt-2 text-sm text-[var(--muted)]">
             Score {s.preNdaScore}/100 · {s.researchMode === "ai_enriched" ? "AI-enriched" : "Listing + industry knowledge"} ·
@@ -758,23 +786,27 @@ export function DealClient({ id }: { id: string }) {
 function ScreenSummary({
   title,
   tone,
-  text,
+  items,
 }: {
   title: string;
-  tone: "good" | "bad" | "ugly";
-  text: string;
+  tone: "good" | "bad" | "interesting";
+  items: string[];
 }) {
   const styles = {
     good: "bg-emerald-100 text-emerald-950",
     bad: "bg-amber-100 text-amber-950",
-    ugly: "bg-stone-900 text-white",
+    interesting: "bg-blue-100 text-blue-950",
   };
   return (
     <div className={`rounded-xl p-4 ${styles[tone]}`}>
       <div className="text-xs font-semibold uppercase tracking-wider">
         {title}
       </div>
-      <p className="mt-2 text-sm">{text}</p>
+      <ul className="mt-2 list-disc space-y-2 pl-5 text-sm">
+        {items.map((item) => (
+          <li key={item}>{item}</li>
+        ))}
+      </ul>
     </div>
   );
 }

@@ -20,6 +20,12 @@ import {
 } from "./pipeline";
 import { parsePastedListing } from "./intake";
 import { blobConfiguration, normalizeEtag } from "./blob-store";
+import {
+  categorizeDeal,
+  ensureDealClassification,
+  operatingStyleFor,
+} from "./classification";
+import { companyHighlights } from "./deal-brief";
 import type {
   Deal,
   DocumentRecord,
@@ -433,6 +439,60 @@ describe("shared persistence configuration", () => {
       configured: false,
       source: "none",
     });
+  });
+});
+
+describe("TESIM business categories and company-specific brief", () => {
+  it.each([
+    ["East Texas portfolio", "Gas stations / C-stores", "Gas / C-store", "Hands-off"],
+    ["ACE Painting", "Commercial painting contractor", "Painting / coatings", "Hands-on"],
+    ["Uniquecoat Technologies", "Industrial technology / thermal spray systems", "Painting / coatings", "Hands-on"],
+    ["Mighty Molding", "Plastic injection molding", "Plastic / injection molding", "Hands-on"],
+    ["Heartland CNC", "Metal fabrication machine shop", "Metal / fabrication / machine shop", "Hands-on"],
+  ] as const)(
+    "maps %s (%s) to %s / %s",
+    (name, industry, category, operatingStyle) => {
+      const fixture = { name, industry, notes: undefined };
+      expect(categorizeDeal(fixture)).toBe(category);
+      expect(operatingStyleFor(fixture)).toBe(operatingStyle);
+    }
+  );
+
+  it("does not reuse Good / Bad / Interesting sentences across companies", () => {
+    const painting = baseDeal();
+    painting.name = "ACE Painting";
+    painting.industry = "Commercial painting contractor";
+    painting.location = "Austin, TX";
+    painting.notes = "Commercial repainting services.";
+
+    const gas = baseDeal();
+    gas.name = "North Loop Fuel";
+    gas.industry = "Gas station and convenience store";
+    gas.location = "Dallas, TX";
+    gas.notes = "Fuel and convenience retail.";
+
+    const first = companyHighlights(painting);
+    const second = companyHighlights(gas);
+    for (const group of ["good", "bad", "interesting"] as const) {
+      expect(first[group].length).toBeGreaterThanOrEqual(3);
+      expect(first[group].length).toBeLessThanOrEqual(6);
+      expect(second[group].length).toBeGreaterThanOrEqual(3);
+      expect(second[group].length).toBeLessThanOrEqual(6);
+      expect(first[group].filter((item) => second[group].includes(item))).toEqual(
+        []
+      );
+    }
+  });
+
+  it("backfills category and operating-style tags without replacing a deal", () => {
+    const deal = baseDeal();
+    deal.name = "East Texas portfolio";
+    deal.industry = "Gas stations / C-stores";
+    expect(ensureDealClassification(deal)).toBe(true);
+    expect(deal.businessCategory).toBe("Gas / C-store");
+    expect(deal.operatingStyleTags).toEqual(["Hands-off"]);
+    expect(deal.id).toBe("finish");
+    expect(ensureDealClassification(deal)).toBe(false);
   });
 });
 

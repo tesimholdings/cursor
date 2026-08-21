@@ -11,6 +11,11 @@ import {
   FUNNEL_STEPS,
   type BrokerCall,
 } from "@/lib/pipeline";
+import {
+  BUSINESS_CATEGORIES,
+  OPERATING_STYLES,
+  classifyDeal,
+} from "@/lib/classification";
 
 type Persistence = { durable: boolean; note: string; error?: string };
 
@@ -22,6 +27,8 @@ export default function RankingPage() {
   const [bestOnly, setBestOnly] = useState(false);
   const [filters, setFilters] = useState({
     call: "all",
+    category: "all",
+    operatingStyle: "all",
     industry: "",
     state: "",
     step: "all",
@@ -76,6 +83,21 @@ export default function RankingPage() {
     if (filters.call !== "all") {
       list = list.filter((deal) => brokerCall(deal) === filters.call);
     }
+    if (filters.category !== "all") {
+      list = list.filter(
+        (deal) =>
+          (deal.businessCategory || classifyDeal(deal).businessCategory) ===
+          filters.category
+      );
+    }
+    if (filters.operatingStyle !== "all") {
+      list = list.filter((deal) =>
+        (
+          deal.operatingStyleTags ||
+          classifyDeal(deal).operatingStyleTags
+        ).includes(filters.operatingStyle as "Hands-off" | "Hands-on" | "Mixed")
+      );
+    }
     if (filters.industry) {
       list = list.filter((deal) =>
         deal.industry.toLowerCase().includes(filters.industry.toLowerCase())
@@ -103,7 +125,7 @@ export default function RankingPage() {
           <div className="kicker">Stefan’s broker screen</div>
           <h1 className="serif text-4xl">Which listings deserve an NDA?</h1>
           <p className="mt-2 text-[var(--muted)]">
-            Scan the original pre-NDA score and Good / Bad / Ugly before
+            Scan the original pre-NDA score and Good / Bad / Interesting before
             spending time with the broker.
           </p>
         </div>
@@ -154,6 +176,34 @@ export default function RankingPage() {
         </select>
         <select
           className="rounded-lg border border-[var(--line)] bg-white px-2 py-1"
+          value={filters.category}
+          onChange={(event) =>
+            setFilters({ ...filters, category: event.target.value })
+          }
+        >
+          <option value="all">All business categories</option>
+          {BUSINESS_CATEGORIES.map((category) => (
+            <option key={category} value={category}>
+              {category}
+            </option>
+          ))}
+        </select>
+        <select
+          className="rounded-lg border border-[var(--line)] bg-white px-2 py-1"
+          value={filters.operatingStyle}
+          onChange={(event) =>
+            setFilters({ ...filters, operatingStyle: event.target.value })
+          }
+        >
+          <option value="all">All operating styles</option>
+          {OPERATING_STYLES.map((style) => (
+            <option key={style} value={style}>
+              {style}
+            </option>
+          ))}
+        </select>
+        <select
+          className="rounded-lg border border-[var(--line)] bg-white px-2 py-1"
           value={filters.step}
           onChange={(event) =>
             setFilters({ ...filters, step: event.target.value })
@@ -188,7 +238,7 @@ export default function RankingPage() {
         className="card overflow-x-auto rounded-2xl"
         hidden={Boolean(failure)}
       >
-        <table className="w-full min-w-[1320px] text-left text-sm">
+        <table className="w-full min-w-[1450px] text-left text-sm">
           <thead className="border-b border-[var(--line)] text-xs uppercase tracking-wide text-[var(--muted)]">
             <tr>
               {[
@@ -198,7 +248,7 @@ export default function RankingPage() {
                 "Screen",
                 "Good",
                 "Bad",
-                "Ugly",
+                "Interesting",
                 "Broker call",
                 "Ask",
                 "Revenue",
@@ -216,6 +266,13 @@ export default function RankingPage() {
               const earnings = deal.sde || deal.ebitda;
               const askingMultiple = multiple(deal.askingPrice, earnings);
               const screen = brokerScreen(deal);
+              const classification = {
+                businessCategory:
+                  deal.businessCategory || classifyDeal(deal).businessCategory,
+                operatingStyleTags:
+                  deal.operatingStyleTags ||
+                  classifyDeal(deal).operatingStyleTags,
+              };
               const step = FUNNEL_STEPS.find(
                 (item) => item.key === screen.step
               );
@@ -235,6 +292,19 @@ export default function RankingPage() {
                     <div className="text-xs text-[var(--muted)]">
                       {deal.industry} · {deal.location}
                     </div>
+                    <div className="mt-2 flex max-w-56 flex-wrap gap-1">
+                      <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-800">
+                        {classification.businessCategory}
+                      </span>
+                      {classification.operatingStyleTags.map((tag) => (
+                        <span
+                          key={tag}
+                          className="rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-semibold text-blue-900"
+                        >
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
                   </td>
                   <td className="px-3 py-4">
                     <span className="font-semibold">{step?.key}</span>
@@ -250,7 +320,7 @@ export default function RankingPage() {
                   </td>
                   <ScreenBullet tone="good" text={screen.good} />
                   <ScreenBullet tone="bad" text={screen.bad} />
-                  <ScreenBullet tone="ugly" text={screen.ugly} />
+                  <ScreenBullet tone="interesting" text={screen.interesting} />
                   <td className="px-3 py-4">
                     <BrokerBadge call={screen.call} />
                   </td>
@@ -274,19 +344,23 @@ function ScreenBullet({
   tone,
   text,
 }: {
-  tone: "good" | "bad" | "ugly";
-  text: string;
+  tone: "good" | "bad" | "interesting";
+  text: string[];
 }) {
   const styles = {
     good: "bg-emerald-100 text-emerald-900",
     bad: "bg-amber-100 text-amber-950",
-    ugly: "bg-stone-900 text-white",
+    interesting: "bg-blue-100 text-blue-950",
   };
   return (
     <td className="px-3 py-4">
-      <div className={`max-w-52 rounded-lg p-2 text-xs ${styles[tone]}`}>
-        {text}
-      </div>
+      <ul
+        className={`max-w-56 list-disc space-y-1 rounded-lg p-3 pl-6 text-xs ${styles[tone]}`}
+      >
+        {text.slice(0, 2).map((item) => (
+          <li key={item}>{item}</li>
+        ))}
+      </ul>
     </td>
   );
 }

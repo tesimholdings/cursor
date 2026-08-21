@@ -1,19 +1,23 @@
 "use client";
 
 import { useState } from "react";
-import type { OwnerQuestionReport, PublicResearch } from "@/lib/types";
+import type { Deal, OwnerQuestionReport, PublicResearch } from "@/lib/types";
 import { EvidenceBadge, TrafficDot } from "./EvidenceBadge";
 import { ScoreRing } from "./ScoreRing";
+import { conciseDealQuestions } from "@/lib/deal-brief";
 
 export function OwnerQuestionsPanel({
   report,
   research,
+  deal,
 }: {
   report: OwnerQuestionReport;
   research?: PublicResearch;
+  deal: Deal;
 }) {
   const [openSection, setOpenSection] = useState<string | null>("business");
   const [openQuestion, setOpenQuestion] = useState<number | null>(null);
+  const concise = conciseDealQuestions(deal);
 
   return (
     <section className="card rounded-2xl p-5">
@@ -22,9 +26,8 @@ export function OwnerQuestionsPanel({
           <div className="kicker">Mandatory first screen</div>
           <h2 className="serif text-2xl">Step 1A — Owner Questions</h2>
           <p className="mt-1 max-w-3xl text-sm text-[var(--muted)]">
-            What is this thing, who needs it, can it grow, what limits it, what
-            assets do we own, and should we request the NDA? Step 1B only runs
-            after all 40 questions are processed.
+            Short company-specific answers first. The full 40-question record
+            remains available below for diligence.
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -38,9 +41,40 @@ export function OwnerQuestionsPanel({
         </div>
       </div>
 
-      <div className="mt-5 rounded-xl bg-[var(--paper)] p-4">
+      <div className="mt-5 space-y-3">
+        {concise.map((item) => (
+          <div
+            key={item.question}
+            className="rounded-xl border border-[var(--line)] bg-white p-4"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="font-semibold">{item.question}</h3>
+                <p className="mt-1 text-sm">{item.answer}</p>
+              </div>
+              <EvidenceBadge kind={item.kind} />
+            </div>
+            {(item.why || item.unknown || item.next) && (
+              <details className="mt-3 text-xs text-[var(--muted)]">
+                <summary className="cursor-pointer font-semibold">
+                  Why / unknown / next ask
+                </summary>
+                <div className="mt-2 space-y-1">
+                  {item.why && <p><strong>Why:</strong> {item.why}</p>}
+                  {item.unknown && <p><strong>Unknown:</strong> {item.unknown}</p>}
+                  {item.next && <p><strong>Next ask:</strong> {item.next}</p>}
+                </div>
+              </details>
+            )}
+          </div>
+        ))}
+      </div>
+
+      <details className="mt-5 rounded-xl bg-[var(--paper)] p-4">
+        <summary className="cursor-pointer font-semibold">
+          Public research brief
+        </summary>
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h3 className="font-semibold">Public research brief</h3>
           <span className="text-xs text-[var(--muted)]">
             {research?.status === "complete"
               ? `${research.sources.length} fetched source(s)`
@@ -69,9 +103,13 @@ export function OwnerQuestionsPanel({
             ))}
           </ol>
         ) : null}
-      </div>
+      </details>
 
-      <div className="mt-5 grid gap-3 md:grid-cols-3">
+      <details className="mt-5">
+        <summary className="cursor-pointer rounded-xl bg-[var(--navy)] px-4 py-3 font-semibold text-white">
+          Full Q&amp;A — all 40 diligence questions
+        </summary>
+      <div className="mt-4 grid gap-3 md:grid-cols-3">
         {report.sections.map((section) => {
           const open = openSection === section.id;
           return (
@@ -197,8 +235,13 @@ export function OwnerQuestionsPanel({
           </ol>
         </div>
       )}
+      </details>
 
-      <div className="mt-5 grid gap-4 md:grid-cols-3">
+      <details className="mt-5 rounded-xl bg-[var(--paper)] p-4">
+        <summary className="cursor-pointer font-semibold">
+          Full screen summary and unanswered list
+        </summary>
+      <div className="mt-4 grid gap-4 md:grid-cols-3">
         <SummaryList title="What we like" items={report.whatWeLike} />
         <SummaryList title="What concerns us" items={report.concerns} />
         <SummaryList
@@ -206,6 +249,7 @@ export function OwnerQuestionsPanel({
           items={report.unanswered}
         />
       </div>
+      </details>
       <div className="mt-4 rounded-xl bg-[var(--navy)] p-4 text-[#f7f1e4]">
         <div className="kicker !text-[#c9bea8]">
           Should we request the NDA?

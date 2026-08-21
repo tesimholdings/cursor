@@ -44,6 +44,23 @@ export type Role =
   | "Financial Diligence"
   | "Operator";
 
+export type BusinessCategory =
+  | "Gas / C-store"
+  | "Car wash"
+  | "RV / MH park"
+  | "Laundromat / lube"
+  | "Plastic / injection molding"
+  | "Metal / fabrication / machine shop"
+  | "Painting / coatings"
+  | "Construction / trades"
+  | "Trucking / logistics"
+  | "Distribution / wholesale"
+  | "Industrial equipment / manufacturing other"
+  | "Other"
+  | "Unknown";
+
+export type OperatingStyle = "Hands-off" | "Hands-on" | "Mixed";
+
 export interface Fact<T = string | number | boolean | null> {
   value: T;
   kind: EvidenceKind;
@@ -433,6 +450,8 @@ export interface Deal {
   listingUrl?: string;
   websiteUrl?: string;
   industry: string;
+  businessCategory?: BusinessCategory;
+  operatingStyleTags?: OperatingStyle[];
   location: string;
   state?: string;
   askingPrice?: number | null;

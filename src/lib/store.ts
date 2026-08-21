@@ -3,6 +3,7 @@ import path from "path";
 import os from "os";
 import type { Store } from "./types";
 import { seedStore } from "./seed";
+import { ensureStoreClassifications } from "./classification";
 import {
   blobConfiguration,
   blobLocation,
@@ -122,15 +123,20 @@ function persistLocal(store: Store) {
 }
 
 async function readLocalStore(): Promise<Store> {
-  if (cache) return cache;
+  if (cache) {
+    if (ensureStoreClassifications(cache.deals)) persistLocal(cache);
+    return cache;
+  }
   try {
     cache = JSON.parse(fs.readFileSync(STORE_PATH, "utf8")) as Store;
+    if (ensureStoreClassifications(cache.deals)) persistLocal(cache);
     return cache;
   } catch (error) {
     lastPersistError =
       error instanceof Error ? error.message : "Unreadable store file";
   }
   const seeded = seedStore();
+  ensureStoreClassifications(seeded.deals);
   cache = seeded;
   persistLocal(seeded);
   return seeded;
@@ -154,9 +160,27 @@ interface BlobStoreSnapshot {
   contentEtag: string | null;
 }
 
-async function readOrCreateBlobStore(): Promise<BlobStoreSnapshot> {
+async function readOrCreateBlobStore(
+  migrationAttempt = 0
+): Promise<BlobStoreSnapshot> {
   const current = await readBlobStore();
   if (current.store && current.etag) {
+    if (ensureStoreClassifications(current.store.deals)) {
+      try {
+        const etag = await writeBlobStore(current.store, current.etag);
+        return {
+          store: current.store,
+          etag,
+          contentEtag: null,
+        };
+      } catch (error) {
+        if (isBlobConflict(error) && migrationAttempt < 3) {
+          await backoff(migrationAttempt);
+          return readOrCreateBlobStore(migrationAttempt + 1);
+        }
+        throw error;
+      }
+    }
     return {
       store: current.store,
       etag: current.etag,
@@ -165,6 +189,7 @@ async function readOrCreateBlobStore(): Promise<BlobStoreSnapshot> {
   }
 
   const seeded = seedStore();
+  ensureStoreClassifications(seeded.deals);
   try {
     const etag = await writeBlobStore(seeded, null);
     return { store: seeded, etag, contentEtag: null };
@@ -205,6 +230,7 @@ export async function updateStore<T>(
       for (let attempt = 0; attempt < attempts; attempt += 1) {
         const state = await readOrCreateBlobStore();
         const result = await fn(state.store);
+        ensureStoreClassifications(state.store.deals);
         try {
           await writeBlobStore(state.store, state.etag);
           lastPersistError = undefined;

@@ -1,4 +1,5 @@
 import type { Deal, Store } from "./types";
+import { companyHighlights } from "./deal-brief";
 
 export type BrokerCall = "INQUIRE + NDA" | "NEED MORE" | "PASS";
 export type FunnelStepNumber = 1 | 2 | 3 | 4 | 5;
@@ -63,28 +64,13 @@ export function brokerCall(deal: Deal): BrokerCall {
 }
 
 export function brokerScreen(deal: Deal) {
-  const good =
-    deal.ownerQuestions?.whatWeLike[0] ||
-    (deal.screening?.preNdaScore && deal.screening.preNdaScore >= 68
-      ? "Listing-level economics clear the first screen."
-      : "No evidence-backed positive stands out yet.");
-  const bad =
-    deal.ownerQuestions?.concerns[0] ||
-    deal.screening?.whatWeDont ||
-    "Basic operating evidence is incomplete.";
-  const ugly =
-    deal.diligence?.fatalRisks[0] ||
-    deal.fatalRisks[0] ||
-    deal.ownerQuestions?.unanswered.find((question) =>
-      /customer|earnings|owner|capacity/i.test(question)
-    ) ||
-    "No fatal risk proven; major unknowns remain.";
+  const highlights = companyHighlights(deal);
   return {
     score:
       deal.screening?.preNdaScore ?? deal.ownerQuestions?.score ?? null,
-    good,
-    bad,
-    ugly,
+    good: highlights.good,
+    bad: highlights.bad,
+    interesting: highlights.interesting,
     call: brokerCall(deal),
     step: dealFunnelStep(deal),
   };
@@ -123,7 +109,7 @@ export function stageCopy(deal: Deal): {
       return {
         stageLabel: "Step 1 of 5 — Listing / teaser screen (pre-NDA)",
         needToDo:
-          "Review Good / Bad / Ugly, then decide whether to inquire and sign the NDA.",
+          "Review Good / Bad / Interesting, then decide whether to inquire and sign the NDA.",
         nextButton: { label: "Inquire + NDA", action: "nda" },
       };
     }
