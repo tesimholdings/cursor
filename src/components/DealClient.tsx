@@ -15,6 +15,7 @@ import { resolveAssigneeName } from "@/lib/assign";
 import { OwnerQuestionsPanel } from "@/components/OwnerQuestionsPanel";
 import { DealScanPills } from "@/components/DealScanPills";
 import { BoardScorePanel } from "@/components/BoardScores";
+import { AskAboutDeal } from "@/components/AskAboutDeal";
 import { headlineScore } from "@/lib/board-scoring";
 
 export function DealClient({ id }: { id: string }) {
@@ -136,6 +137,8 @@ export function DealClient({ id }: { id: string }) {
       </div>
 
       <BoardScorePanel deal={deal} />
+
+      <AskAboutDeal dealId={deal.id} dealName={deal.name} />
 
       <div className="grid gap-4 md:grid-cols-3">
         <section className="card rounded-2xl p-5 md:col-span-2">
