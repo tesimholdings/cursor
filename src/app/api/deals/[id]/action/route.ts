@@ -9,7 +9,6 @@ const MAP: Record<string, PipelineStatus> = {
   nda: "nda_requested",
   wait_packet: "waiting_packet",
   packet: "packet_review",
-  diligence: "diligence",
   loi: "loi",
   financing: "financing",
   closing: "closing",
@@ -23,14 +22,23 @@ export async function POST(
 ) {
   const { id } = await ctx.params;
   const body = await req.json();
-  const deal = await updateStore((store) => {
+  const result = await updateStore((store) => {
     const d = store.deals.find((x) => x.id === id);
-    if (!d) return null;
+    if (!d) return { error: "Not found", status: 404 } as const;
+    if (
+      ["loi", "financing", "closing", "acquired"].includes(body.action) &&
+      !d.diligence
+    ) {
+      return {
+        error: "Step 5 is locked until the Full IC is complete.",
+        status: 409,
+      } as const;
+    }
     if (body.action && MAP[body.action]) {
       d.status = MAP[body.action];
     }
     if (body.inputs as FinancingInputs) {
-      const cf = d.diligence?.buyerSde || d.sde || d.ebitda || 0;
+      const cf = d.diligence?.normalizedEbitda ?? null;
       d.financing = {
         inputs: body.inputs,
         result: computeFinancing(body.inputs, cf),
@@ -41,10 +49,15 @@ export async function POST(
       if (q) q.status = body.status;
     }
     d.updatedAt = new Date().toISOString();
-    return d;
+    return { deal: d } as const;
   });
-  if (!deal) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  return NextResponse.json({ deal });
+  if ("error" in result) {
+    return NextResponse.json(
+      { error: result.error },
+      { status: result.status }
+    );
+  }
+  return NextResponse.json({ deal: result.deal });
 }
 
 export async function GET(

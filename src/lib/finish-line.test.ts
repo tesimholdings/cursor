@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import ExcelJS from "exceljs";
 import { PDFDocument, StandardFonts } from "pdf-lib";
-import { extractDocument } from "./document-extraction";
+import { classifyDocument, extractDocument } from "./document-extraction";
 import {
   isSafeCitationUrl,
   validatedResearchSources,
@@ -12,6 +12,13 @@ import { analyzePacket } from "./packet";
 import { parseSpreadsheet } from "./parse-spreadsheet";
 import { matchIndustry } from "./industry";
 import { numericClaimsSupported } from "./ai";
+import {
+  brokerCall,
+  canRunFullIc,
+  dealFunnelStep,
+  FUNNEL_STEPS,
+} from "./pipeline";
+import { parsePastedListing } from "./intake";
 import type {
   Deal,
   DocumentRecord,
@@ -61,6 +68,7 @@ describe("document extraction", () => {
     });
     expect(result.chunks[0]?.text).toContain("Alpha");
     expect(result.tables?.[0]?.rows[0]?.cells.Revenue).toBe("B2");
+    expect(classifyDocument("upload.xlsx", result)).toBe("customers");
   });
 
   it("imports an XLSX business list with listing and company URLs", async () => {
@@ -116,6 +124,9 @@ describe("document extraction", () => {
         Buffer.from(bytes)
       ),
     };
+    expect(classifyDocument("upload.xlsx", document.extraction)).toBe(
+      "financials"
+    );
     const packet = analyzePacket(deal, "", [document]);
     const revenue = packet.evidence.find((item) => item.label === "Revenue");
     expect(revenue).toMatchObject({
@@ -184,6 +195,108 @@ describe("TESIM live-lane coverage", () => {
     if (expectedKey !== "mold") {
       expect(profile.usMarketSize.value).toMatch(/NOT AVAILABLE/);
     }
+  });
+});
+
+describe("Stefan product-lock funnel", () => {
+  it("uses the five locked funnel labels", () => {
+    expect(FUNNEL_STEPS.map((step) => step.label)).toEqual([
+      "1. Listing / teaser screen (pre-NDA)",
+      "2. NDA + CIM",
+      "3. Financials / QoE packet",
+      "4. Full IC",
+      "5. LOI / price / structure",
+    ]);
+  });
+
+  it("preserves the broker call and blocks Full IC from teaser SDE", () => {
+    const deal = baseDeal();
+    deal.status = "screened";
+    deal.screening = {
+      researchedAt: new Date().toISOString(),
+      researchMode: "listing_and_industry",
+      questions: [],
+      icp: "Unanswered",
+      prospects: [],
+      valuationLabel: "Reasonable",
+      taxAttractiveness: "Low",
+      industryQuality: 70,
+      growthScore: 60,
+      assetsScore: 40,
+      preNdaScore: 74,
+      decision: "REQUEST_NDA",
+      decisionWhy: "First screen only",
+      whatWeKnow: "Listing claims",
+      whatWeDont: "Financial proof",
+      whyItMatters: "Broker call",
+      whatNext: "Inquire",
+    };
+    expect(brokerCall(deal)).toBe("INQUIRE + NDA");
+    expect(dealFunnelStep(deal)).toBe(1);
+    expect(canRunFullIc(deal)).toBe(false);
+  });
+
+  it("unlocks Step 3 from readable financials and Step 4 only after IC", async () => {
+    const deal = baseDeal();
+    deal.status = "packet_review";
+    deal.screening = {
+      researchedAt: new Date().toISOString(),
+      researchMode: "listing_and_industry",
+      questions: [],
+      icp: "Unanswered",
+      prospects: [],
+      valuationLabel: "Reasonable",
+      taxAttractiveness: "Low",
+      industryQuality: 70,
+      growthScore: 60,
+      assetsScore: 40,
+      preNdaScore: 74,
+      decision: "REQUEST_NDA",
+      decisionWhy: "Original screen",
+      whatWeKnow: "Listing claims",
+      whatWeDont: "Financial proof",
+      whyItMatters: "Broker call",
+      whatNext: "Inquire",
+    };
+    const bytes = await workbookBuffer("P&L", [
+      ["Metric", "Amount"],
+      ["Revenue", 4_000_000],
+    ]);
+    deal.documents.push({
+      id: "financials",
+      dealId: deal.id,
+      name: "financials.xlsx",
+      category: "financials",
+      stage: 3,
+      uploadedAt: new Date().toISOString(),
+      size: bytes.byteLength,
+      extraction: await extractDocument("financials.xlsx", Buffer.from(bytes)),
+    });
+    expect(canRunFullIc(deal)).toBe(true);
+    expect(dealFunnelStep(deal)).toBe(3);
+    deal.diligence = runDiligence(deal);
+    expect(dealFunnelStep(deal)).toBe(4);
+    deal.status = "loi";
+    expect(dealFunnelStep(deal)).toBe(5);
+    expect(deal.screening.preNdaScore).toBe(74);
+  });
+
+  it("parses pasted broker intel without inventing missing fields", () => {
+    const parsed = parsePastedListing(`Company: Fast Wash LLC
+Industry: Express car wash
+Location: Columbus, OH
+Asking price: $7.5M
+Revenue: $4.0M
+SDE: $1.1M`);
+    expect(parsed).toMatchObject({
+      name: "Fast Wash LLC",
+      industry: "Express car wash",
+      location: "Columbus, OH",
+      askingPrice: 7_500_000,
+      revenue: 4_000_000,
+      sde: 1_100_000,
+      ebitda: null,
+    });
   });
 });
 

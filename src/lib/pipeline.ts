@@ -1,37 +1,100 @@
-import type { Deal, PipelineStatus, Store } from "./types";
+import type { Deal, Store } from "./types";
 
-export const PIPELINE_COLUMNS: { key: PipelineStatus | "screened"; label: string; statuses: PipelineStatus[] }[] = [
-  { key: "imported", label: "New deals to screen", statuses: ["imported", "screening"] },
-  { key: "screened", label: "Screened", statuses: ["screened"] },
-  { key: "nda_requested", label: "NDA requested", statuses: ["nda_requested"] },
-  { key: "waiting_packet", label: "Waiting for packets", statuses: ["waiting_packet"] },
-  { key: "packet_review", label: "Packets received", statuses: ["packet_review"] },
-  { key: "diligence", label: "Under diligence", statuses: ["diligence"] },
-  { key: "loi", label: "LOI", statuses: ["loi"] },
-  { key: "financing", label: "Financing", statuses: ["financing"] },
-  { key: "closing", label: "Closing", statuses: ["closing"] },
-  { key: "passed", label: "Passed", statuses: ["passed"] },
+export type BrokerCall = "INQUIRE + NDA" | "NEED MORE" | "PASS";
+export type FunnelStepNumber = 1 | 2 | 3 | 4 | 5;
+
+export const FUNNEL_STEPS: Array<{
+  key: FunnelStepNumber;
+  label: string;
+  shortLabel: string;
+}> = [
+  {
+    key: 1,
+    label: "1. Listing / teaser screen (pre-NDA)",
+    shortLabel: "Listing / teaser",
+  },
+  { key: 2, label: "2. NDA + CIM", shortLabel: "NDA + CIM" },
+  {
+    key: 3,
+    label: "3. Financials / QoE packet",
+    shortLabel: "Financials / QoE",
+  },
+  { key: 4, label: "4. Full IC", shortLabel: "Full IC" },
+  {
+    key: 5,
+    label: "5. LOI / price / structure",
+    shortLabel: "LOI / structure",
+  },
 ];
 
+export const PIPELINE_COLUMNS = FUNNEL_STEPS;
+
+export function canRunFullIc(deal: Deal) {
+  return deal.documents.some(
+    (document) =>
+      document.category === "financials" &&
+      document.extraction?.status === "complete" &&
+      document.extraction.chunks.length > 0
+  );
+}
+
+export function dealFunnelStep(deal: Deal): FunnelStepNumber {
+  if (
+    ["loi", "financing", "closing", "acquired"].includes(deal.status)
+  ) {
+    return 5;
+  }
+  if (deal.diligence && canRunFullIc(deal)) return 4;
+  if (canRunFullIc(deal)) return 3;
+  if (
+    ["nda_requested", "waiting_packet", "packet_review"].includes(deal.status) ||
+    deal.documents.some((document) => document.category === "cim")
+  ) {
+    return 2;
+  }
+  return 1;
+}
+
+export function brokerCall(deal: Deal): BrokerCall {
+  if (deal.status === "passed" || deal.screening?.decision === "PASS")
+    return "PASS";
+  if (deal.screening?.decision === "REQUEST_NDA") return "INQUIRE + NDA";
+  return "NEED MORE";
+}
+
+export function brokerScreen(deal: Deal) {
+  const good =
+    deal.ownerQuestions?.whatWeLike[0] ||
+    (deal.screening?.preNdaScore && deal.screening.preNdaScore >= 68
+      ? "Listing-level economics clear the first screen."
+      : "No evidence-backed positive stands out yet.");
+  const bad =
+    deal.ownerQuestions?.concerns[0] ||
+    deal.screening?.whatWeDont ||
+    "Basic operating evidence is incomplete.";
+  const ugly =
+    deal.diligence?.fatalRisks[0] ||
+    deal.fatalRisks[0] ||
+    deal.ownerQuestions?.unanswered.find((question) =>
+      /customer|earnings|owner|capacity/i.test(question)
+    ) ||
+    "No fatal risk proven; major unknowns remain.";
+  return {
+    score:
+      deal.screening?.preNdaScore ?? deal.ownerQuestions?.score ?? null,
+    good,
+    bad,
+    ugly,
+    call: brokerCall(deal),
+    step: dealFunnelStep(deal),
+  };
+}
+
 export function funnel(deals: Deal[]) {
-  const n = deals.length;
-  const researched = deals.filter((d) => d.researchStatus === "complete").length;
-  const worthNda = deals.filter((d) => d.screening?.decision === "REQUEST_NDA" || ["nda_requested", "waiting_packet", "packet_review", "diligence", "loi", "financing", "closing", "acquired"].includes(d.status)).length;
-  const packets = deals.filter((d) => d.documents.some((x) => x.stage >= 2) || ["packet_review", "diligence", "loi", "financing", "closing", "acquired"].includes(d.status)).length;
-  const advanced = deals.filter((d) => ["diligence", "loi", "financing", "closing", "acquired"].includes(d.status)).length;
-  const lois = deals.filter((d) => ["loi", "financing", "closing", "acquired"].includes(d.status)).length;
-  const finalDil = deals.filter((d) => ["financing", "closing", "acquired"].includes(d.status) || (d.status === "diligence" && d.diligence)).length;
-  const acquired = deals.filter((d) => d.status === "acquired").length;
-  return [
-    { label: "Businesses imported", value: n },
-    { label: "Researched", value: researched },
-    { label: "Worth NDA", value: worthNda },
-    { label: "Packets received", value: packets },
-    { label: "Advanced", value: advanced },
-    { label: "LOIs", value: lois },
-    { label: "Final diligence", value: finalDil },
-    { label: "Acquisition", value: acquired },
-  ];
+  return FUNNEL_STEPS.map((step) => ({
+    label: step.label,
+    value: deals.filter((deal) => dealFunnelStep(deal) === step.key).length,
+  }));
 }
 
 export function stageCopy(deal: Deal): {
@@ -39,104 +102,109 @@ export function stageCopy(deal: Deal): {
   needToDo: string;
   nextButton?: { label: string; action: string };
 } {
+  const step = dealFunnelStep(deal);
   if (deal.status === "passed") {
-    return { stageLabel: "Passed — we are not buying this one", needToDo: "Nothing. Keep the file for memory." };
-  }
-  if (!deal.ownerQuestions) {
     return {
-      stageLabel: "Step 1A — Owner Questions",
-      needToDo:
-        deal.researchStatus === "running"
-          ? "Nothing yet. The Command Center is answering the Owner Questions first."
-          : "Run the mandatory Owner Questions before the normal Pre-NDA screen.",
+      stageLabel: `Step ${step} of 5 — Passed`,
+      needToDo: "Nothing. Preserve the original screen and evidence trail.",
     };
   }
-  if (deal.researchStatus === "pending" || deal.researchStatus === "running" || deal.status === "imported" || deal.status === "screening") {
-    return {
-      stageLabel: "Step 1B — Normal listing / public financial screen",
-      needToDo:
-        deal.researchStatus === "running"
-          ? "Nothing yet. AI is researching the company."
-          : "Start screening, or wait for the research queue.",
-    };
-  }
-  if (deal.status === "screened") {
+  if (step === 1) {
+    if (!deal.ownerQuestions || deal.researchStatus !== "complete") {
+      return {
+        stageLabel: "Step 1 of 5 — Listing / teaser screen (pre-NDA)",
+        needToDo:
+          deal.researchStatus === "running"
+            ? "Nothing yet. Public research and the Owner Questions are running."
+            : "Run the listing / teaser screen.",
+      };
+    }
     if (deal.screening?.decision === "REQUEST_NDA") {
       return {
-        stageLabel: "Step 1B — First NDA decision",
-        needToDo: "Review the one-page summary, then request the NDA or pass.",
-        nextButton: { label: "Request NDA", action: "nda" },
+        stageLabel: "Step 1 of 5 — Listing / teaser screen (pre-NDA)",
+        needToDo:
+          "Review Good / Bad / Ugly, then decide whether to inquire and sign the NDA.",
+        nextButton: { label: "Inquire + NDA", action: "nda" },
       };
     }
-    if (deal.screening?.decision === "MAYBE") {
+    if (deal.screening?.decision === "PASS") {
       return {
-        stageLabel: "Step 1B — Need one or two answers first",
-        needToDo: "Get the missing fact (usually earnings or a plain-English description), then decide.",
-        nextButton: { label: "Request NDA anyway", action: "nda" },
+        stageLabel: "Step 1 of 5 — Listing / teaser screen (pre-NDA)",
+        needToDo: "The broker call is PASS. Confirm it or preserve as NEED MORE.",
+        nextButton: { label: "Pass", action: "pass" },
       };
     }
     return {
-      stageLabel: "Step 1B — Recommendation is PASS",
-      needToDo: "Confirm pass so we do not keep seeing this card.",
-      nextButton: { label: "Pass", action: "pass" },
+      stageLabel: "Step 1 of 5 — Listing / teaser screen (pre-NDA)",
+      needToDo:
+        "Get the few missing broker answers before signing an NDA.",
+      nextButton: { label: "Inquire + NDA anyway", action: "nda" },
     };
   }
-  if (deal.status === "nda_requested" || deal.status === "waiting_packet") {
+  if (step === 2) {
     return {
-      stageLabel: "Stage 2 of 3 — Waiting on the information packet",
-      needToDo: "Send the NDA, then upload the CIM / P&Ls when they arrive.",
-      nextButton: { label: "Mark waiting for packet", action: "wait_packet" },
+      stageLabel: "Step 2 of 5 — NDA + CIM",
+      needToDo: deal.packet
+        ? "Review the CIM screen, then upload financials / QoE when received."
+        : "Complete the NDA and upload the CIM. Do not run a Full IC from teaser SDE.",
+      nextButton:
+        deal.status === "nda_requested"
+          ? { label: "Mark waiting for CIM", action: "wait_packet" }
+          : undefined,
     };
   }
-  if (deal.status === "packet_review") {
+  if (step === 3) {
     return {
-      stageLabel: "Stage 2 of 3 — Is this good enough for an LOI?",
-      needToDo: deal.packet ? "Read the packet score and either advance, ask questions, renegotiate, or pass." : "Upload the packet and run the second filter.",
-      nextButton: { label: "Advance to diligence", action: "diligence" },
+      stageLabel: "Step 3 of 5 — Financials / QoE packet",
+      needToDo:
+        "Readable financial materials are attached. Review extraction status, then run the Full IC.",
     };
   }
-  if (deal.status === "diligence") {
+  if (step === 4) {
     return {
-      stageLabel: "Stage 3 of 3 — Full due diligence",
-      needToDo: "Upload tax returns and the rest. The system will score buy / pass. Fatal risks override a high score.",
-      nextButton: { label: "Move to LOI", action: "loi" },
+      stageLabel: "Step 4 of 5 — Full IC",
+      needToDo:
+        "Review the 0–100 IC score, fatal risks, maximum price, structure, and walk triggers.",
+      nextButton: { label: "Move to LOI / structure", action: "loi" },
     };
   }
-  if (deal.status === "loi") {
-    return {
-      stageLabel: "LOI / negotiation",
-      needToDo: "Lock price, exclusivity, and customer-call rights. Then financing.",
-      nextButton: { label: "Move to financing", action: "financing" },
-    };
-  }
-  if (deal.status === "financing") {
-    return {
-      stageLabel: "Financing",
-      needToDo: "Confirm DSCR, equity, and seller note with Angela / the lender.",
-      nextButton: { label: "Move to closing", action: "closing" },
-    };
-  }
-  if (deal.status === "closing") {
-    return {
-      stageLabel: "Closing",
-      needToDo: "Attorney-led close. After funds, mark acquired.",
-      nextButton: { label: "Mark acquired", action: "acquired" },
-    };
-  }
-  return { stageLabel: "Acquired", needToDo: "100-day plan. Keep the existing business safe." };
+  return {
+    stageLabel: "Step 5 of 5 — LOI / price / structure",
+    needToDo:
+      deal.status === "loi"
+        ? "Negotiate price, seller protections, working capital, and financing."
+        : deal.status === "financing"
+          ? "Confirm lender terms and downside debt coverage."
+          : deal.status === "closing"
+            ? "Close only after every pre-close condition is satisfied."
+            : "Execute the approved structure and 100-day plan.",
+    nextButton:
+      deal.status === "loi"
+        ? { label: "Move to financing", action: "financing" }
+        : deal.status === "financing"
+          ? { label: "Move to closing", action: "closing" }
+          : deal.status === "closing"
+            ? { label: "Mark acquired", action: "acquired" }
+            : undefined,
+  };
 }
 
 export function researchProgress(store: Store) {
   const total = store.deals.length;
   const done = store.deals.filter(
-    (d) =>
-      d.researchStatus === "complete" &&
-      Boolean(d.publicResearch) &&
-      d.ownerQuestions?.status === "complete"
+    (deal) =>
+      deal.researchStatus === "complete" &&
+      Boolean(deal.publicResearch) &&
+      deal.ownerQuestions?.status === "complete"
   ).length;
-  const running = store.deals.filter((d) => d.researchStatus === "running").length;
+  const running = store.deals.filter(
+    (deal) => deal.researchStatus === "running"
+  ).length;
   const pending = store.deals.filter(
-    (d) => d.researchStatus === "pending" || !d.publicResearch || !d.ownerQuestions
+    (deal) =>
+      deal.researchStatus === "pending" ||
+      !deal.publicResearch ||
+      !deal.ownerQuestions
   ).length;
   return { total, done, running, pending };
 }

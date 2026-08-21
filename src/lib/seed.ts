@@ -2,7 +2,6 @@ import type { Deal, Store } from "./types";
 import { defaultTeams } from "./teams";
 import { buildStage1 } from "./screening";
 import { analyzePacket, applyPacketAssignments } from "./packet";
-import { attachModels, runDiligence } from "./diligence";
 import { buildOwnerQuestions } from "./owner-questions";
 
 function deal(
@@ -174,7 +173,7 @@ export function seedStore(): Store {
   }
 
   const mighty = rows.find((d) => d.id === "deal_mighty")!;
-  mighty.status = "diligence";
+  mighty.status = "packet_review";
   mighty.teamId = "team_mighty";
   mighty.documents.push({
     id: "doc_cim_mighty",
@@ -185,12 +184,10 @@ export function seedStore(): Store {
     uploadedAt: new Date().toISOString(),
     size: 1200,
     textExcerpt:
-      "Revenue $4.19 million. SDE $1.12 million. EBITDA $980,000. Add-backs include owner's auto and a one-time roof repair. Largest customer is about 28% of revenue. ISO 9001. Real estate included. Equipment list of 14 injection presses.",
+      "Demo CIM placeholder. Customer concentration, contracts, certifications, equipment schedule, utilization, capacity, and verified financials are NOT PROVIDED.",
   });
   mighty.packet = analyzePacket(mighty, mighty.documents[0].textExcerpt || "");
   applyPacketAssignments(mighty);
-  mighty.diligence = runDiligence(mighty);
-  attachModels(mighty);
 
   const heart = rows.find((d) => d.id === "deal_heartland")!;
   heart.status = "waiting_packet";

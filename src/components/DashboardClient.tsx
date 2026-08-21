@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { Funnel } from "@/components/Funnel";
 import { DealCard } from "@/components/DealCard";
-import { PIPELINE_COLUMNS } from "@/lib/pipeline";
+import { dealFunnelStep, PIPELINE_COLUMNS } from "@/lib/pipeline";
 import type { Deal, Store } from "@/lib/types";
 import Link from "next/link";
 import { Play } from "lucide-react";
@@ -55,7 +55,7 @@ export function DashboardClient() {
 
   const byCol = PIPELINE_COLUMNS.map((col) => ({
     ...col,
-    deals: data.deals.filter((d) => col.statuses.includes(d.status)),
+    deals: data.deals.filter((deal) => dealFunnelStep(deal) === col.key),
   }));
 
   return (
@@ -70,10 +70,13 @@ export function DashboardClient() {
           </p>
         </div>
         <div className="flex gap-2">
-          <Link href="/upload" className="btn btn-ghost">
-            Upload a list
+          <Link href="/ranking" className="btn btn-primary">
+            Open broker board
           </Link>
-          <button className="btn btn-primary" onClick={runQueue} disabled={busy}>
+          <Link href="/upload" className="btn btn-ghost">
+            Add companies
+          </Link>
+          <button className="btn btn-ghost" onClick={runQueue} disabled={busy}>
             <Play size={14} />
             {busy ? "Screening…" : `Screen remaining (${data.research.pending})`}
           </button>

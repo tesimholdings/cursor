@@ -5,7 +5,7 @@ export function Funnel({ steps }: { steps: { label: string; value: number }[] })
         <div className="kicker">Master pipeline</div>
         <div className="serif text-xl">How far the list has gotten</div>
       </div>
-      <ol className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8">
+      <ol className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
         {steps.map((s, i) => (
           <li key={s.label} className="border-[var(--line)] px-4 py-4 md:border-r last:border-r-0">
             <div className="serif text-3xl">{s.value}</div>

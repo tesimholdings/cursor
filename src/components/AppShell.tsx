@@ -6,8 +6,8 @@ import { Building2, LayoutDashboard, ListFilter, Upload, Users } from "lucide-re
 
 const NAV = [
   { href: "/", label: "Pipeline", icon: LayoutDashboard },
-  { href: "/ranking", label: "Rankings", icon: ListFilter },
-  { href: "/upload", label: "Upload list", icon: Upload },
+  { href: "/ranking", label: "Broker board", icon: ListFilter },
+  { href: "/upload", label: "Intake", icon: Upload },
   { href: "/teams", label: "Teams", icon: Users },
 ];
 

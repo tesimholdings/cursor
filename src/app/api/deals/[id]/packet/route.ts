@@ -4,8 +4,8 @@ import { analyzePacket, applyPacketAssignments } from "@/lib/packet";
 import { id } from "@/lib/format";
 import type { DocumentRecord } from "@/lib/types";
 import {
+  classifyDocument,
   extractDocument,
-  guessDocumentCategory,
 } from "@/lib/document-extraction";
 
 export const dynamic = "force-dynamic";
@@ -21,15 +21,16 @@ export async function POST(
   for (const file of files) {
     if (!(file instanceof File)) continue;
     const buffer = Buffer.from(await file.arrayBuffer());
+    const extraction = await extractDocument(file.name, buffer, file.type);
     uploadedDocuments.push({
       id: id("doc"),
       dealId,
       name: file.name,
-      category: guessDocumentCategory(file.name),
+      category: classifyDocument(file.name, extraction),
       stage: 2,
       uploadedAt: new Date().toISOString(),
       size: file.size,
-      extraction: await extractDocument(file.name, buffer, file.type),
+      extraction,
     });
   }
   const pasted = String(form.get("text") || "").trim();

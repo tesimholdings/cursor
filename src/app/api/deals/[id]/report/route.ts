@@ -12,6 +12,15 @@ export async function GET(
   const store = await readStore();
   const deal = store.deals.find((d) => d.id === id);
   if (!deal) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (!deal.diligence) {
+    return NextResponse.json(
+      {
+        error:
+          "Full IC report is locked until readable financials / QoE are uploaded and Step 4 is run.",
+      },
+      { status: 409 }
+    );
+  }
   const html = investmentCommitteeHtml(deal);
   return new NextResponse(html, {
     headers: {

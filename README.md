@@ -2,22 +2,24 @@
 
 A simple full-stack workspace for buying lower-middle-market businesses (typically **$5–10 million** asking price, with support for smaller and larger deals).
 
-The product is a funnel, not a 400-field spreadsheet:
+The product is a five-step funnel, not a 400-field spreadsheet:
 
-1. **Upload a list** (CSV / Excel)
-2. **Step 1A — Owner Questions** — the investor's 40 mandatory questions run first
-3. **Step 1B** — normal listing/public-financial screen
-4. **Stage 2** — Is the information packet good enough for an LOI?
-5. **Stage 3** — Diligence, financing, tax sketch, downside cases
-6. **Buy, continue, renegotiate, or pass**
+1. **Listing / teaser screen (pre-NDA)** — paste intel, upload one teaser, or
+   upload a multi-company CSV/XLSX. The broker board preserves a 0–100 screen,
+   one Good / Bad / Ugly bullet, and `INQUIRE + NDA | NEED MORE | PASS`.
+2. **NDA + CIM**
+3. **Financials / QoE packet**
+4. **Full IC** — unlocked only by a readable financials/QoE document
+5. **LOI / price / structure**
 
 Every screen answers four things: what we know, what we don’t, why it matters, and what to do next.
 
 Facts are labeled **Verified**, **Seller provided**, **Estimate**, **AI calculation**, **Assumption**, **Not provided**, **Conflict**, or **External research**. The app will not invent capacity or pick a number when listing and packet disagree.
 
-Step 1B is guarded in code: it cannot run until Step 1A has persisted all 40
-Owner Questions. The UI groups them into seven small expandable sections rather
-than dumping 40 answers onto one screen.
+Inside Step 1, the mandatory Owner Questions run before the normal listing
+screen. The original pre-NDA score is preserved when later documents arrive.
+The Full IC API and report are hard-locked until financial materials are
+readable; teaser SDE never drives a Full IC, financing case, or maximum price.
 
 Step 1A uses supplied listing/company URLs and, when configured, Tavily public
 search. Search results are persisted with their real URLs and excerpts. AI

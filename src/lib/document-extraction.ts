@@ -223,7 +223,9 @@ export function guessDocumentCategory(
     value.includes("balance") ||
     value.includes("income statement") ||
     value.includes("general ledger") ||
-    value.includes("financial")
+    value.includes("financial") ||
+    value.includes("qoe") ||
+    value.includes("quality of earnings")
   )
     return "financials";
   if (value.includes("tax")) return "tax";
@@ -240,5 +242,35 @@ export function guessDocumentCategory(
     value.includes("contract")
   )
     return "legal";
+  return "other";
+}
+
+export function classifyDocument(
+  name: string,
+  extraction?: DocumentExtraction
+): DocumentRecord["category"] {
+  const named = guessDocumentCategory(name);
+  if (named !== "other" || extraction?.status !== "complete") return named;
+  const headers = (extraction.tables || [])
+    .flatMap((table) => table.headers)
+    .join(" ");
+  const text = extraction.chunks
+    .slice(0, 30)
+    .map((chunk) => chunk.text)
+    .join(" ");
+  const sample = `${headers} ${text}`;
+  if (
+    /customer|client/i.test(headers) &&
+    /revenue|sales/i.test(headers)
+  )
+    return "customers";
+  if (
+    /income statement|balance sheet|revenue|sales|cogs|gross profit|ebitda|net income|accounts receivable/i.test(
+      sample
+    )
+  )
+    return "financials";
+  if (/machine|manufacturer|model|serial|equipment|fixed asset/i.test(sample))
+    return "equipment";
   return "other";
 }

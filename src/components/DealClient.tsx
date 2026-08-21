@@ -3,7 +3,12 @@
 import { useEffect, useState } from "react";
 import type { Deal, FinancingInputs, Team } from "@/lib/types";
 import { money, pct } from "@/lib/format";
-import { stageCopy } from "@/lib/pipeline";
+import {
+  brokerScreen,
+  canRunFullIc,
+  dealFunnelStep,
+  stageCopy,
+} from "@/lib/pipeline";
 import { EvidenceBadge, TrafficDot } from "@/components/EvidenceBadge";
 import { ScoreRing } from "@/components/ScoreRing";
 import { resolveAssigneeName } from "@/lib/assign";
@@ -14,6 +19,7 @@ export function DealClient({ id }: { id: string }) {
   const [teams, setTeams] = useState<Team[]>([]);
   const [fullQs, setFullQs] = useState(false);
   const [openQ, setOpenQ] = useState<number | null>(null);
+  const [operationError, setOperationError] = useState<string | null>(null);
 
   async function load() {
     const res = await fetch(`/api/deals/${id}`, { cache: "no-store" });
@@ -30,12 +36,17 @@ export function DealClient({ id }: { id: string }) {
   }, [id]);
 
   async function action(name: string, extra?: object) {
+    setOperationError(null);
     const res = await fetch(`/api/deals/${id}/action`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: name, ...extra }),
     });
     const json = await res.json();
+    if (!res.ok) {
+      setOperationError(json.error || "Action failed.");
+      return;
+    }
     setDeal(json.deal);
   }
 
@@ -50,8 +61,13 @@ export function DealClient({ id }: { id: string }) {
   }
 
   async function upload(url: string, form: HTMLFormElement) {
+    setOperationError(null);
     const res = await fetch(url, { method: "POST", body: new FormData(form) });
     const json = await res.json();
+    if (!res.ok) {
+      setOperationError(json.error || "Upload failed.");
+      return;
+    }
     setDeal(json.deal);
   }
 
@@ -62,6 +78,9 @@ export function DealClient({ id }: { id: string }) {
   const s = deal.screening;
   const p = deal.packet;
   const d = deal.diligence;
+  const broker = brokerScreen(deal);
+  const fullIcReady = canRunFullIc(deal);
+  const funnelStep = dealFunnelStep(deal);
 
   return (
     <div className="space-y-6">
@@ -76,6 +95,11 @@ export function DealClient({ id }: { id: string }) {
           <p className="mt-2 text-sm text-white/70">A high score can never hide a fatal risk.</p>
         </div>
       ) : null}
+      {operationError && (
+        <div className="rounded-xl bg-red-100 p-4 text-sm text-red-900">
+          {operationError}
+        </div>
+      )}
 
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
@@ -125,14 +149,14 @@ export function DealClient({ id }: { id: string }) {
                 Screen this company
               </button>
             )}
-            {s?.decision === "REQUEST_NDA" && deal.status === "screened" && (
+            {broker.call === "INQUIRE + NDA" && funnelStep === 1 && (
               <button className="btn btn-primary" onClick={() => action("nda")}>
-                Request NDA
+                Inquire + NDA
               </button>
             )}
-            {s?.decision === "MAYBE" && deal.status === "screened" && (
+            {broker.call === "NEED MORE" && funnelStep === 1 && (
               <button className="btn btn-gold" onClick={() => action("nda")}>
-                Request NDA anyway
+                Inquire + NDA anyway
               </button>
             )}
             {deal.status !== "passed" && deal.status !== "acquired" && (
@@ -140,23 +164,40 @@ export function DealClient({ id }: { id: string }) {
                 Pass
               </button>
             )}
-            {guide.nextButton && deal.status !== "screened" && (
+            {guide.nextButton && funnelStep > 1 && (
               <button className="btn btn-primary" onClick={() => action(guide.nextButton!.action)}>
                 {guide.nextButton.label}
               </button>
             )}
-            <a className="btn btn-ghost" href={`/api/deals/${deal.id}/report`}>
-              Download IC report
-            </a>
+            {d && (
+              <a className="btn btn-ghost" href={`/api/deals/${deal.id}/report`}>
+                Download IC report
+              </a>
+            )}
           </div>
         </section>
         <section className="card rounded-2xl p-5 space-y-3">
-          <div className="kicker">The answer</div>
+          <div className="kicker">
+            {funnelStep === 1 ? "Broker call" : "Current decision"}
+          </div>
           <p className="serif text-2xl">
-            {(d?.finalDecision || p?.decision || s?.decision || o?.decision || "NOT SCREENED").toString().replace(/_/g, " ")}
+            {funnelStep === 1
+              ? broker.call
+              : (
+                  d?.finalDecision ||
+                  p?.decision ||
+                  s?.decision ||
+                  o?.decision ||
+                  "NOT SCREENED"
+                )
+                  .toString()
+                  .replace(/_/g, " ")}
           </p>
           <p className="text-sm">
-            {p?.decisionWhy || s?.decisionWhy || o?.decisionWhy || d?.whatNext}
+            {d?.recommendationWhy[0] ||
+              p?.decisionWhy ||
+              s?.decisionWhy ||
+              o?.decisionWhy}
           </p>
           <div>
             <div className="kicker">Why</div>
@@ -188,6 +229,27 @@ export function DealClient({ id }: { id: string }) {
           </label>
         </section>
       </div>
+
+      <section className="card rounded-2xl p-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <div className="kicker">Original broker screen</div>
+            <h2 className="serif text-2xl">Good / Bad / Ugly</h2>
+          </div>
+          <div className="text-right">
+            <div className="serif text-3xl">
+              {broker.score ?? "—"}
+              <span className="text-sm text-[var(--muted)]"> / 100</span>
+            </div>
+            <div className="text-sm font-semibold">{broker.call}</div>
+          </div>
+        </div>
+        <div className="mt-4 grid gap-3 md:grid-cols-3">
+          <ScreenSummary title="Good" tone="good" text={broker.good} />
+          <ScreenSummary title="Bad" tone="bad" text={broker.bad} />
+          <ScreenSummary title="Ugly" tone="ugly" text={broker.ugly} />
+        </div>
+      </section>
 
       <FourBox
         know={
@@ -258,9 +320,11 @@ export function DealClient({ id }: { id: string }) {
       )}
 
       <section className="card rounded-2xl p-5">
-        <h2 className="serif text-2xl">Stage 2 — Information packet</h2>
+        <div className="kicker">Step 2 of 5</div>
+        <h2 className="serif text-2xl">NDA + CIM</h2>
         <p className="mt-1 text-sm text-[var(--muted)]">
-          Upload the CIM, P&Ls, equipment list, or paste key pages. We compare listing vs packet and never silently pick a number.
+          After the NDA, upload the CIM or paste key pages. This is still a
+          seller-packet screen—not a Full IC.
         </p>
         <form
           className="mt-4 space-y-3"
@@ -276,7 +340,7 @@ export function DealClient({ id }: { id: string }) {
             className="w-full rounded-lg border border-[var(--line)] p-2 text-sm"
             placeholder="Paste CIM excerpts, revenue, SDE, add-backs, customer comments…"
           />
-          <button className="btn btn-primary">Run second filter</button>
+          <button className="btn btn-primary">Review CIM / seller packet</button>
         </form>
         {deal.documents.filter((doc) => doc.stage === 2).length > 0 && (
           <ul className="mt-4 space-y-1 text-xs text-[var(--muted)]">
@@ -350,7 +414,13 @@ export function DealClient({ id }: { id: string }) {
       </section>
 
       <section className="card rounded-2xl p-5">
-        <h2 className="serif text-2xl">Stage 3 — Full due diligence</h2>
+        <div className="kicker">Step 3 of 5</div>
+        <h2 className="serif text-2xl">Financials / QoE packet</h2>
+        <p className="mt-1 text-sm text-[var(--muted)]">
+          Upload readable P&amp;Ls, tax returns, GL, bank statements, QoE, and
+          customer revenue files. Uploading them unlocks—but does not
+          automatically run—the Full IC.
+        </p>
         <form
           className="mt-3 flex flex-wrap items-center gap-3"
           onSubmit={(e) => {
@@ -358,9 +428,56 @@ export function DealClient({ id }: { id: string }) {
             upload(`/api/deals/${deal.id}/diligence`, e.currentTarget);
           }}
         >
-          <input name="files" type="file" multiple />
-          <button className="btn btn-primary">Run diligence scoring</button>
+          <input type="hidden" name="action" value="upload" />
+          <input
+            name="files"
+            type="file"
+            accept=".pdf,.xlsx,.csv,.txt"
+            multiple
+          />
+          <button className="btn btn-primary">
+            Upload financials / QoE
+          </button>
         </form>
+        {deal.documents.filter((document) => document.stage === 3).length >
+          0 && (
+          <ul className="mt-4 space-y-1 text-xs text-[var(--muted)]">
+            {deal.documents
+              .filter((document) => document.stage === 3)
+              .map((document) => (
+                <li key={document.id}>
+                  {document.name} — {document.category} — extraction{" "}
+                  {document.extraction?.status || "not run"}
+                  {document.extraction?.error
+                    ? `: ${document.extraction.error}`
+                    : ""}
+                </li>
+              ))}
+          </ul>
+        )}
+      </section>
+
+      <section className="card rounded-2xl p-5">
+        <div className="kicker">Step 4 of 5</div>
+        <h2 className="serif text-2xl">Full IC</h2>
+        {!fullIcReady ? (
+          <div className="mt-3 rounded-xl bg-[var(--paper)] p-4 text-sm">
+            <strong>Locked.</strong> Upload at least one readable document
+            classified as financials / QoE in Step 3. Teaser SDE cannot produce
+            a Full IC.
+          </div>
+        ) : !d ? (
+          <form
+            className="mt-3"
+            onSubmit={(event) => {
+              event.preventDefault();
+              upload(`/api/deals/${deal.id}/diligence`, event.currentTarget);
+            }}
+          >
+            <input type="hidden" name="action" value="run_ic" />
+            <button className="btn btn-primary">Run Full IC</button>
+          </form>
+        ) : null}
         {d && (
           <div className="mt-6 space-y-4">
             <p className="serif text-2xl">
@@ -586,6 +703,41 @@ export function DealClient({ id }: { id: string }) {
         </section>
       )}
 
+      <section className="card rounded-2xl p-5">
+        <div className="kicker">Step 5 of 5</div>
+        <h2 className="serif text-2xl">LOI / price / structure</h2>
+        {!d ? (
+          <p className="mt-2 text-sm text-[var(--muted)]">
+            Locked until the Full IC is complete.
+          </p>
+        ) : (
+          <div className="mt-3 space-y-3 text-sm">
+            <p>
+              <strong>Maximum price:</strong>{" "}
+              {d.maxPrice.value == null ? "UNANSWERED" : money(d.maxPrice.value)}
+              {" — "}
+              {d.maxPrice.basis}
+            </p>
+            <div>
+              <strong>Preferred structure</strong>
+              <ul className="mt-1 list-disc pl-5">
+                {d.preferredStructure.map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+            </div>
+            {funnelStep === 4 && (
+              <button className="btn btn-primary" onClick={() => action("loi")}>
+                Move to LOI / price / structure
+              </button>
+            )}
+            {funnelStep === 5 && (
+              <p className="font-semibold">Current status: {guide.stageLabel}</p>
+            )}
+          </div>
+        )}
+      </section>
+
       {deal.assignedQuestions.length > 0 && (
         <section className="card rounded-2xl p-5">
           <h2 className="serif text-2xl">Assigned to the team</h2>
@@ -599,6 +751,30 @@ export function DealClient({ id }: { id: string }) {
           </ul>
         </section>
       )}
+    </div>
+  );
+}
+
+function ScreenSummary({
+  title,
+  tone,
+  text,
+}: {
+  title: string;
+  tone: "good" | "bad" | "ugly";
+  text: string;
+}) {
+  const styles = {
+    good: "bg-emerald-100 text-emerald-950",
+    bad: "bg-amber-100 text-amber-950",
+    ugly: "bg-stone-900 text-white",
+  };
+  return (
+    <div className={`rounded-xl p-4 ${styles[tone]}`}>
+      <div className="text-xs font-semibold uppercase tracking-wider">
+        {title}
+      </div>
+      <p className="mt-2 text-sm">{text}</p>
     </div>
   );
 }
