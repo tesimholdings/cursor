@@ -468,6 +468,28 @@ export function dealInPriceBand(deal: Deal, band: PriceBand): boolean {
   return ask > 10_000_000;
 }
 
+/** Min/max are asking-price dollars already on the deal. No-ask is out if either bound is set. */
+export function dealInAskRange(
+  deal: Deal,
+  min?: number | null,
+  max?: number | null
+): boolean {
+  if (min == null && max == null) return true;
+  const ask = askingPriceValue(deal);
+  if (ask == null) return false;
+  if (min != null && ask < min) return false;
+  if (max != null && ask > max) return false;
+  return true;
+}
+
+export function parseAskMillions(raw: string): number | null {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  const value = Number(trimmed);
+  if (!Number.isFinite(value) || value < 0) return null;
+  return value * 1_000_000;
+}
+
 export function compareDealsByPrice(
   a: Deal,
   b: Deal,

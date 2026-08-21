@@ -27,10 +27,13 @@ import {
   BOARD_SCORE_METRICS,
   boardScoreValue,
   headlineScore,
+  dealInAskRange,
   dealInPriceBand,
+  parseAskMillions,
   sortBrokerBoard,
   type BoardScoreMetric,
   type BoardSort,
+  type HeadlineSort,
   type PriceBand,
 } from "@/lib/board-scoring";
 
@@ -44,6 +47,8 @@ export default function RankingPage() {
   const [bestOnly, setBestOnly] = useState(false);
   const [boardSort, setBoardSort] = useState<BoardSort>("best");
   const [priceBand, setPriceBand] = useState<PriceBand>("all");
+  const [askMin, setAskMin] = useState("");
+  const [askMax, setAskMax] = useState("");
   const [query, setQuery] = useState("");
   const [scoreMetric, setScoreMetric] =
     useState<BoardScoreMetric>("average");
@@ -155,8 +160,24 @@ export default function RankingPage() {
     if (priceBand !== "all") {
       list = list.filter((deal) => dealInPriceBand(deal, priceBand));
     }
+    const minAsk = parseAskMillions(askMin);
+    const maxAsk = parseAskMillions(askMax);
+    if (minAsk != null || maxAsk != null) {
+      list = list.filter((deal) => dealInAskRange(deal, minAsk, maxAsk));
+    }
     return sortBrokerBoard(list, boardSort);
-  }, [deals, bestOnly, filters, query, scoreMetric, minimumScore, boardSort, priceBand]);
+  }, [
+    deals,
+    bestOnly,
+    filters,
+    query,
+    scoreMetric,
+    minimumScore,
+    boardSort,
+    priceBand,
+    askMin,
+    askMax,
+  ]);
 
   return (
     <div className="space-y-6">
@@ -175,14 +196,38 @@ export default function RankingPage() {
           <div
             className="inline-flex rounded-full border border-[var(--line)] bg-white p-1"
             role="group"
-            aria-label="Sort deals by headline score or asking price"
+            aria-label="Sort deals by headline score"
           >
             {(
               [
                 ["best", "Best first"],
                 ["worst", "Worst first"],
-                ["price-high", "Price high"],
-                ["price-low", "Price low"],
+              ] as const satisfies Array<[HeadlineSort, string]>
+            ).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                className={`rounded-full px-4 py-2 text-sm font-semibold ${
+                  boardSort === value
+                    ? "bg-[var(--navy)] text-[#f7f1e4]"
+                    : "text-[var(--ink)]"
+                }`}
+                aria-pressed={boardSort === value}
+                onClick={() => setBoardSort(value)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <div
+            className="inline-flex rounded-full border border-[var(--line)] bg-white p-1"
+            role="group"
+            aria-label="Sort deals by asking price"
+          >
+            {(
+              [
+                ["price-low", "Price low→high"],
+                ["price-high", "Price high→low"],
               ] as const
             ).map(([value, label]) => (
               <button
@@ -319,6 +364,34 @@ export default function RankingPage() {
           <option value="box">$5–10M</option>
           <option value="over10">Over $10M</option>
         </select>
+        <label className="flex items-center gap-2">
+          Ask min $M
+          <input
+            aria-label="Minimum asking price in millions"
+            type="number"
+            min="0"
+            step="0.1"
+            inputMode="decimal"
+            placeholder="—"
+            className="w-20 rounded-lg border border-[var(--line)] bg-white px-2 py-1"
+            value={askMin}
+            onChange={(event) => setAskMin(event.target.value)}
+          />
+        </label>
+        <label className="flex items-center gap-2">
+          Ask max $M
+          <input
+            aria-label="Maximum asking price in millions"
+            type="number"
+            min="0"
+            step="0.1"
+            inputMode="decimal"
+            placeholder="—"
+            className="w-20 rounded-lg border border-[var(--line)] bg-white px-2 py-1"
+            value={askMax}
+            onChange={(event) => setAskMax(event.target.value)}
+          />
+        </label>
         <select
           className="rounded-lg border border-[var(--line)] bg-white px-2 py-1"
           value={filters.call}

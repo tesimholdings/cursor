@@ -41,7 +41,9 @@ import {
   headlineScore,
   icHeadlineScore,
   purchaseValueAverage,
+  dealInAskRange,
   dealInPriceBand,
+  parseAskMillions,
   sortBrokerBoard,
   sortDealsByHeadline,
   sortDealsByPrice,
@@ -1159,6 +1161,18 @@ describe("asking-price sort and filter", () => {
     expect(dealInPriceBand(none, "under5")).toBe(false);
     expect(dealInPriceBand(none, "box")).toBe(false);
     expect(dealInPriceBand(none, "over10")).toBe(false);
+  });
+
+  it("filters a min–max ask range without inventing a missing price", () => {
+    const low = { ...baseDeal(), askingPrice: 3_000_000 };
+    const mid = { ...baseDeal(), askingPrice: 7_000_000 };
+    const none = { ...baseDeal(), askingPrice: null };
+    expect(parseAskMillions("5")).toBe(5_000_000);
+    expect(parseAskMillions("")).toBeNull();
+    expect(dealInAskRange(mid, 5_000_000, 10_000_000)).toBe(true);
+    expect(dealInAskRange(low, 5_000_000, 10_000_000)).toBe(false);
+    expect(dealInAskRange(none, 5_000_000, null)).toBe(false);
+    expect(dealInAskRange(none, null, null)).toBe(true);
   });
 });
 
