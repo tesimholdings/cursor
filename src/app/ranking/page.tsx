@@ -22,7 +22,10 @@ import { BoardScoreStrip } from "@/components/BoardScores";
 import {
   BOARD_SCORE_METRICS,
   boardScoreValue,
+  headlineScore,
+  sortDealsByHeadline,
   type BoardScoreMetric,
+  type HeadlineSort,
 } from "@/lib/board-scoring";
 
 type Persistence = { durable: boolean; note: string; error?: string };
@@ -33,6 +36,7 @@ export default function RankingPage() {
   const [failure, setFailure] = useState<string | null>(null);
   const [researching, setResearching] = useState(false);
   const [bestOnly, setBestOnly] = useState(false);
+  const [headlineSort, setHeadlineSort] = useState<HeadlineSort>("best");
   const [query, setQuery] = useState("");
   const [scoreMetric, setScoreMetric] =
     useState<BoardScoreMetric>("average");
@@ -134,11 +138,8 @@ export default function RankingPage() {
           boardScoreValue(deal, scoreMetric) >= Number(minimumScore)
       );
     }
-    return list.sort(
-      (a, b) =>
-        boardScoreValue(b, scoreMetric) - boardScoreValue(a, scoreMetric)
-    );
-  }, [deals, bestOnly, filters, query, scoreMetric, minimumScore]);
+    return sortDealsByHeadline(list, headlineSort);
+  }, [deals, bestOnly, filters, query, scoreMetric, minimumScore, headlineSort]);
 
   return (
     <div className="space-y-6">
@@ -147,11 +148,42 @@ export default function RankingPage() {
           <div className="kicker">Stefan’s broker screen</div>
           <h1 className="serif text-4xl">Which listings deserve an NDA?</h1>
           <p className="mt-2 text-[var(--muted)]">
-            Scan the original pre-NDA score and Good / Bad / Interesting before
-            spending time with the broker.
+            Sort by the same headline already on the card — IC score when a
+            Full IC exists, otherwise Board average — then scan Good / Bad /
+            Interesting before spending time with the broker.
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <div
+            className="inline-flex rounded-full border border-[var(--line)] bg-white p-1"
+            role="group"
+            aria-label="Sort deals by headline score"
+          >
+            <button
+              type="button"
+              className={`rounded-full px-4 py-2 text-sm font-semibold ${
+                headlineSort === "best"
+                  ? "bg-[var(--navy)] text-[#f7f1e4]"
+                  : "text-[var(--ink)]"
+              }`}
+              aria-pressed={headlineSort === "best"}
+              onClick={() => setHeadlineSort("best")}
+            >
+              Best first
+            </button>
+            <button
+              type="button"
+              className={`rounded-full px-4 py-2 text-sm font-semibold ${
+                headlineSort === "worst"
+                  ? "bg-[var(--navy)] text-[#f7f1e4]"
+                  : "text-[var(--ink)]"
+              }`}
+              aria-pressed={headlineSort === "worst"}
+              onClick={() => setHeadlineSort("worst")}
+            >
+              Worst first
+            </button>
+          </div>
           {researching && (
             <span className="text-sm text-[var(--muted)]">
               Screening imported rows…
@@ -224,9 +256,9 @@ export default function RankingPage() {
 
       <div className="card flex flex-wrap gap-3 rounded-2xl p-4 text-sm">
         <label className="flex items-center gap-2">
-          Rank by
+          Filter score
           <select
-            aria-label="Score used to rank deals"
+            aria-label="Score used for the minimum filter"
             className="rounded-lg border border-[var(--line)] bg-white px-2 py-1"
             value={scoreMetric}
             onChange={(event) =>
@@ -328,6 +360,12 @@ export default function RankingPage() {
         />
       </div>
 
+      <p className="text-sm text-[var(--muted)]">
+        Showing {ranked.length} of {deals.length}{" "}
+        {headlineSort === "best" ? "best first" : "worst first"} by the card
+        headline. Search and filters apply first.
+      </p>
+
       <div
         className="card overflow-x-auto rounded-2xl"
         hidden={Boolean(failure)}
@@ -339,7 +377,7 @@ export default function RankingPage() {
                 "Rank",
                 "Company",
                 "Step",
-                "Average",
+                "Score",
                 "Good",
                 "Bad",
                 "Interesting",
@@ -372,6 +410,8 @@ export default function RankingPage() {
               const earnings = deal.sde || deal.ebitda;
               const askingMultiple = multiple(deal.askingPrice, earnings);
               const screen = brokerScreen(deal);
+              const headline = headlineScore(deal);
+              const rank = headline.score;
               const step = FUNNEL_STEPS.find(
                 (item) => item.key === screen.step
               );
@@ -401,9 +441,17 @@ export default function RankingPage() {
                   </td>
                   <td className="px-3 py-4">
                     <span className="serif text-2xl">
-                      {screen.score ?? "—"}
+                      {Number.isFinite(rank) ? rank : "—"}
                     </span>
                     <span className="text-xs text-[var(--muted)]"> / 100</span>
+                    <div className="text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+                      {headline.label}
+                    </div>
+                    {headline.label === "IC score" && (
+                      <div className="text-[10px] text-[var(--muted)]">
+                        Average {headline.boardAverage}
+                      </div>
+                    )}
                     <BoardScoreStrip
                       deal={deal}
                       className="mt-2 max-w-52"

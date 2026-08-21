@@ -321,3 +321,34 @@ export function headlineScore(deal: Deal) {
     boardAverage: board.average,
   };
 }
+
+export type HeadlineSort = "best" | "worst";
+
+/** The number the deal card already shows, or null when that rank is missing. */
+export function headlineRankValue(deal: Deal): number | null {
+  const score = headlineScore(deal).score;
+  return typeof score === "number" && Number.isFinite(score) ? score : null;
+}
+
+export function compareDealsByHeadline(
+  a: Deal,
+  b: Deal,
+  sort: HeadlineSort
+): number {
+  const aScore = headlineRankValue(a);
+  const bScore = headlineRankValue(b);
+  const aMissing = aScore == null;
+  const bMissing = bScore == null;
+  if (aMissing !== bMissing) {
+    if (sort === "best") return aMissing ? 1 : -1;
+    return aMissing ? -1 : 1;
+  }
+  if (!aMissing && !bMissing && aScore !== bScore) {
+    return sort === "best" ? bScore - aScore : aScore - bScore;
+  }
+  return a.name.localeCompare(b.name);
+}
+
+export function sortDealsByHeadline(deals: Deal[], sort: HeadlineSort): Deal[] {
+  return [...deals].sort((a, b) => compareDealsByHeadline(a, b, sort));
+}

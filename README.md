@@ -20,11 +20,13 @@ and earnings quality. Missing evidence produces `Unknown` or `Unverified`, never
 an optimistic guess. Seed records are marked `Seed / Demo`.
 
 The headline listing-level **Board score** is the rounded, equal-weight average
-of Financials, Owner, Growth, Hands-off, Safety, and Assets. The board can sort
-and set a minimum against the Average or any sub-score. Owner Questions and
-listing math remain inputs/evidence, not rival headline scores. If a Full IC is
-run, the locked weighted IC score becomes the headline while the Board average
-stays visible separately.
+of Financials, Owner, Growth, Hands-off, Safety, and Assets. The broker board
+sorts Best first (default) or Worst first by that same headline — IC score when
+a Full IC exists, otherwise Board average. Unscored deals sit last when Best
+first and first when Worst first. A minimum filter can still use the Average or
+any sub-score. Owner Questions and listing math remain inputs/evidence, not
+rival headline scores. If a Full IC is run, the locked weighted IC score
+becomes the headline while the Board average stays visible separately.
 
 Facts are labeled **Verified**, **Seller provided**, **Estimate**, **AI calculation**, **Assumption**, **Not provided**, **Conflict**, or **External research**. The app will not invent capacity or pick a number when listing and packet disagree.
 

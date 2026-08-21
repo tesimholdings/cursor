@@ -34,7 +34,9 @@ import {
   boardScoreValue,
   buildBoardScores,
   ensureDealBoardScores,
+  headlineRankValue,
   headlineScore,
+  sortDealsByHeadline,
 } from "./board-scoring";
 import type {
   Deal,
@@ -782,6 +784,63 @@ describe("single Board average and six sub-scores", () => {
   });
 });
 
+describe("broker board headline sort", () => {
+  it("uses the card headline and parks unscored deals at the Best/Worst edge", () => {
+    const uniquecoat = scoredDeal("Uniquecoat Technologies, LLC", 74);
+    const mighty = scoredDeal("Mighty Molding and Manufacturing", 68);
+    const pass = scoredDeal("East Texas C-store PASS", 41);
+    const unscored = scoredDeal("Pending listing", Number.NaN);
+
+    expect(headlineRankValue(uniquecoat)).toBe(74);
+    expect(headlineRankValue(unscored)).toBeNull();
+
+    expect(
+      sortDealsByHeadline([pass, unscored, mighty, uniquecoat], "best").map(
+        (deal) => deal.name
+      )
+    ).toEqual([
+      "Uniquecoat Technologies, LLC",
+      "Mighty Molding and Manufacturing",
+      "East Texas C-store PASS",
+      "Pending listing",
+    ]);
+
+    expect(
+      sortDealsByHeadline([uniquecoat, mighty, pass, unscored], "worst").map(
+        (deal) => deal.name
+      )
+    ).toEqual([
+      "Pending listing",
+      "East Texas C-store PASS",
+      "Mighty Molding and Manufacturing",
+      "Uniquecoat Technologies, LLC",
+    ]);
+  });
+
+  it("ranks a Step-2 IC headline ahead of Board average when they disagree", () => {
+    const highBoardLowIc = scoredDeal("High board / low IC", 90);
+    highBoardLowIc.diligence = runDiligence(highBoardLowIc);
+    highBoardLowIc.diligence.scores.total = 40;
+
+    const lowBoardHighIc = scoredDeal("Low board / high IC", 40);
+    lowBoardHighIc.diligence = runDiligence(lowBoardHighIc);
+    lowBoardHighIc.diligence.scores.total = 90;
+
+    expect(headlineScore(highBoardLowIc)).toMatchObject({
+      label: "IC score",
+      score: 40,
+      boardAverage: 90,
+    });
+    expect(headlineRankValue(lowBoardHighIc)).toBe(90);
+
+    expect(
+      sortDealsByHeadline([highBoardLowIc, lowBoardHighIc], "best").map(
+        (deal) => deal.name
+      )
+    ).toEqual(["Low board / high IC", "High board / low IC"]);
+  });
+});
+
 describe("TESIM/AIS IC rules", () => {
   const allowed: FinalDecision[] = [
     "STRONG BUY",
@@ -903,4 +962,12 @@ function baseDeal(): Deal {
     assignedQuestions: [],
     fatalRisks: [],
   };
+}
+
+function scoredDeal(name: string, average: number): Deal {
+  const deal = baseDeal();
+  deal.id = name;
+  deal.name = name;
+  deal.boardScores = { ...buildBoardScores(deal), average };
+  return deal;
 }
