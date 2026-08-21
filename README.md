@@ -82,6 +82,22 @@ Hosted notes:
 - Search and AI synthesis stay off until their keys are set in the Vercel
   project's environment variables.
 
+Attach a Drive-downloaded CIM, teaser, or financial workbook to an existing
+deal by exact ID (this never creates another company row):
+
+```bash
+curl -X POST \
+  -F category=cim \
+  -F stage=2 \
+  -F file=@UCT_CIM.pdf \
+  https://your-deployment/api/deals/deal_61peacy76abh/documents
+```
+
+Accepted files are PDF, XLSX, and XLSM. CIMs are stored as Stage 2 seller
+material, their text is extracted and cited in the refreshed company screen,
+and the deal advances to packet review unless it is already further along.
+Financial uploads unlock Step 3 but never run Full IC automatically.
+
 ## Run locally
 
 ```bash

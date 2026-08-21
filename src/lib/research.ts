@@ -57,11 +57,12 @@ export async function researchNext(limit = 3) {
   });
 }
 
-export async function researchDeal(id: string) {
+export async function researchDeal(id: string, options: { force?: boolean } = {}) {
   return updateStore(async (store) => {
     const deal = store.deals.find((d) => d.id === id);
     if (!deal) throw new Error("Deal not found");
     if (
+      !options.force &&
       deal.researchStatus === "complete" &&
       deal.publicResearch &&
       deal.ownerQuestions &&

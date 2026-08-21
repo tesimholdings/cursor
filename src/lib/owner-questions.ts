@@ -157,6 +157,25 @@ function strongestLight(lights: TrafficLight[]): TrafficLight {
   return "green";
 }
 
+function sellerMemoExcerpt(deal: Deal) {
+  const memo = [...deal.documents]
+    .filter(
+      (document) =>
+        document.category === "cim" &&
+        (document.textExcerpt || document.extraction?.chunks.length)
+    )
+    .sort(
+      (a, b) => Date.parse(b.uploadedAt) - Date.parse(a.uploadedAt)
+    )[0];
+  return (
+    memo?.textExcerpt ||
+    memo?.extraction?.chunks.map((chunk) => chunk.text).join(" ")
+  )
+    ?.replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 600);
+}
+
 export function buildOwnerQuestions(deal: Deal): OwnerQuestionReport {
   const ind = matchIndustry(deal.industry, deal.name, deal.notes);
   const earnings = deal.sde || deal.ebitda;
@@ -165,6 +184,7 @@ export function buildOwnerQuestions(deal: Deal): OwnerQuestionReport {
   const revenueMultiple = multiple(deal.askingPrice, deal.revenue);
   const margin = earnings && deal.revenue ? earnings / deal.revenue : null;
   const assetCoverage = deal.ffe && deal.askingPrice ? deal.ffe / deal.askingPrice : null;
+  const memoExcerpt = sellerMemoExcerpt(deal);
   const needed =
     ind.discretionary === "essential"
       ? ind.wantToOwn10Years
@@ -196,12 +216,19 @@ export function buildOwnerQuestions(deal: Deal): OwnerQuestionReport {
       deal,
       1,
       `${deal.name} appears to sell ${ind.label.toLowerCase()} products or services. ${
-        deal.notes || "The listing does not describe the exact product."
+        memoExcerpt ||
+        deal.notes ||
+        "The listing and attached materials do not describe the exact product."
       } Customers pay for work that solves this problem: ${ind.needed} A typical order moves from request → quote → scheduling/setup → production or service → quality check → delivery → invoice. Employees quote, schedule, operate equipment or perform service, inspect work, ship, and bill. The company makes money on the spread between its selling price and labor, materials, facility, equipment, utilities, maintenance, insurance, and overhead.`,
       {
-        light: deal.notes ? "green" : "yellow",
-        kind: deal.notes ? "SELLER_PROVIDED" : "ESTIMATE",
-        known: [deal.industry, deal.notes || "No listing description"],
+        light: memoExcerpt || deal.notes ? "green" : "yellow",
+        kind: memoExcerpt || deal.notes ? "SELLER_PROVIDED" : "ESTIMATE",
+        known: [
+          deal.industry,
+          memoExcerpt
+            ? `Attached CIM excerpt: ${memoExcerpt}`
+            : deal.notes || "No listing description",
+        ],
         unknown: ["Exact product mix", "Daily workflow", "Major cost breakdown"],
         next: "Ask seller for a one-page order-to-cash walkthrough and revenue by product/service.",
       }

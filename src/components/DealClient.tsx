@@ -69,6 +69,11 @@ export function DealClient({ id }: { id: string }) {
       setOperationError(json.error || "Upload failed.");
       return;
     }
+    if (json.screenRefreshError) {
+      setOperationError(
+        `Document attached, but the company screen could not refresh: ${json.screenRefreshError}`
+      );
+    }
     setDeal(json.deal);
   }
 
@@ -355,20 +360,61 @@ export function DealClient({ id }: { id: string }) {
           seller-packet screen—not a Full IC.
         </p>
         <form
+          className="mt-4 rounded-xl border border-[var(--line)] bg-[var(--paper)] p-4"
+          onSubmit={(event) => {
+            event.preventDefault();
+            upload(
+              `/api/deals/${deal.id}/documents`,
+              event.currentTarget
+            );
+          }}
+        >
+          <div className="font-semibold">Attach to this existing deal</div>
+          <p className="mt-1 text-xs text-[var(--muted)]">
+            The exact deal ID is preserved. This never creates another company
+            row.
+          </p>
+          <div className="mt-3 flex flex-wrap items-center gap-3 text-sm">
+            <select
+              name="category"
+              aria-label="Document category"
+              className="rounded-lg border border-[var(--line)] bg-white p-2"
+              defaultValue="cim"
+            >
+              <option value="cim">CIM (Stage 2)</option>
+              <option value="teaser">Teaser</option>
+              <option value="financials">Financials / QoE (Stage 3)</option>
+            </select>
+            <input
+              name="file"
+              aria-label="PDF or workbook"
+              type="file"
+              accept=".pdf,.xlsx,.xlsm"
+              required
+            />
+            <button className="btn btn-primary">
+              Attach and refresh screen
+            </button>
+          </div>
+        </form>
+        <form
           className="mt-4 space-y-3"
           onSubmit={(e) => {
             e.preventDefault();
             upload(`/api/deals/${deal.id}/packet`, e.currentTarget);
           }}
         >
-          <input name="files" type="file" multiple />
+          <div className="text-sm font-semibold">Or paste a memo excerpt</div>
           <textarea
             name="text"
             rows={4}
+            required
             className="w-full rounded-lg border border-[var(--line)] p-2 text-sm"
             placeholder="Paste CIM excerpts, revenue, SDE, add-backs, customer comments…"
           />
-          <button className="btn btn-primary">Review CIM / seller packet</button>
+          <button className="btn btn-ghost">
+            Review pasted CIM / seller packet
+          </button>
         </form>
         {deal.documents.filter((doc) => doc.stage === 2).length > 0 && (
           <ul className="mt-4 space-y-1 text-xs text-[var(--muted)]">

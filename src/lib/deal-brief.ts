@@ -28,11 +28,22 @@ function cleanExcerpt(value: string | undefined, max = 220) {
 
 function companyEvidence(deal: Deal) {
   const note = cleanExcerpt(deal.notes);
-  const document = deal.documents.find(
-    (item) =>
-      item.textExcerpt ||
-      item.extraction?.chunks.some((chunk) => Boolean(chunk.text.trim()))
-  );
+  const document = [...deal.documents]
+    .filter(
+      (item) =>
+        item.textExcerpt ||
+        item.extraction?.chunks.some((chunk) => Boolean(chunk.text.trim()))
+    )
+    .sort((a, b) => {
+      const priority = { cim: 3, financials: 2, listing: 1 };
+      const categoryDifference =
+        (priority[b.category as keyof typeof priority] || 0) -
+        (priority[a.category as keyof typeof priority] || 0);
+      return (
+        categoryDifference ||
+        Date.parse(b.uploadedAt) - Date.parse(a.uploadedAt)
+      );
+    })[0];
   const documentExcerpt = cleanExcerpt(
     document?.textExcerpt || document?.extraction?.chunks[0]?.text
   );
@@ -121,10 +132,12 @@ export function conciseDealQuestions(deal: Deal): ConciseQuestionAnswer[] {
   const questions: ConciseQuestionAnswer[] = [
     {
       question: "What is this company?",
-      answer: note
-        ? `${deal.name} is listed as ${deal.industry || businessCategory} in ${location}. The listing says: “${note}”`
-        : `${deal.name} is listed as ${deal.industry || businessCategory} in ${location}. Not in the listing yet: a plain-English description of what it sells and how work flows.`,
-      kind: note ? "SELLER_PROVIDED" : "NOT_PROVIDED",
+      answer: documentExcerpt
+        ? `${deal.name} is listed as ${deal.industry || businessCategory} in ${location}. Its supplied ${document?.category.toUpperCase()} says: “${documentExcerpt}”`
+        : note
+          ? `${deal.name} is listed as ${deal.industry || businessCategory} in ${location}. The listing says: “${note}”`
+          : `${deal.name} is listed as ${deal.industry || businessCategory} in ${location}. Not in the listing yet: a plain-English description of what it sells and how work flows.`,
+      kind: documentExcerpt || note ? "SELLER_PROVIDED" : "NOT_PROVIDED",
       unknown: "Exact product or service mix and day-to-day workflow.",
       next: "Ask the broker for a two-sentence business description and revenue mix.",
     },

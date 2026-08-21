@@ -4,6 +4,7 @@ import { PDFDocument, StandardFonts } from "pdf-lib";
 import { classifyDocument, extractDocument } from "./document-extraction";
 import {
   isSafeCitationUrl,
+  researchCompany,
   validatedResearchSources,
 } from "./public-research";
 import { runDiligence } from "./diligence";
@@ -27,6 +28,8 @@ import {
   operatingStyleFor,
 } from "./classification";
 import { companyHighlights } from "./deal-brief";
+import { buildOwnerQuestions } from "./owner-questions";
+import { buildStage1 } from "./screening";
 import type {
   Deal,
   DocumentRecord,
@@ -521,6 +524,62 @@ describe("TESIM business categories and company-specific brief", () => {
     ensureDealClassification(gas);
     expect(dealMatchesSearch(gas, "gas")).toBe(true);
     expect(dealMatchesSearch(gas, "hands-off")).toBe(true);
+  });
+});
+
+describe("existing-deal seller material refresh", () => {
+  it("makes an attached CIM a citable source for refreshed Q&A", async () => {
+    const deal = baseDeal();
+    deal.name = "Memo Test Company";
+    deal.askingPrice = null;
+    deal.revenue = null;
+    deal.sde = null;
+    deal.status = "packet_review";
+    deal.documents.push({
+      id: "doc_cim",
+      dealId: deal.id,
+      name: "Memo_Test_CIM.pdf",
+      category: "cim",
+      stage: 2,
+      uploadedAt: new Date().toISOString(),
+      size: 100,
+      textExcerpt:
+        "Memo Test Company applies protective finishes for industrial customers.",
+      extraction: {
+        status: "complete",
+        extractedAt: new Date().toISOString(),
+        chunks: [
+          {
+            text: "Memo Test Company applies protective finishes for industrial customers.",
+            page: 1,
+          },
+        ],
+      },
+    });
+
+    const research = await researchCompany(deal);
+    expect(research.status).toBe("complete");
+    expect(research.sources[0]).toMatchObject({
+      id: "seller_doc_cim",
+      kind: "SELLER_MATERIAL",
+      title: "CIM — Memo_Test_CIM.pdf",
+    });
+    expect(validatedResearchSources(["seller_doc_cim"], research)).toHaveLength(
+      1
+    );
+
+    deal.publicResearch = research;
+    deal.ownerQuestions = buildOwnerQuestions(deal);
+    expect(deal.ownerQuestions.questions[0].answer).toContain(
+      "applies protective finishes"
+    );
+    deal.screening = buildStage1(deal);
+    expect(deal.screening.questions[0].answer).toContain(
+      "applies protective finishes"
+    );
+    expect(companyHighlights(deal).interesting.join(" ")).toContain(
+      "applies protective finishes"
+    );
   });
 });
 

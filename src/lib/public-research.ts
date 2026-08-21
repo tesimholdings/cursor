@@ -18,7 +18,7 @@ interface TavilyResponse {
 
 export async function researchCompany(deal: Deal): Promise<PublicResearch> {
   const searchedAt = new Date().toISOString();
-  const sources: ResearchSource[] = [];
+  const sources: ResearchSource[] = sellerMaterialSources(deal, searchedAt);
   const errors: string[] = [];
 
   for (const candidate of [
@@ -110,6 +110,34 @@ export async function researchCompany(deal: Deal): Promise<PublicResearch> {
     companyWebsiteUrl: deal.websiteUrl,
     sources: deduped.slice(0, 20),
   };
+}
+
+function sellerMaterialSources(
+  deal: Deal,
+  accessedAt: string
+): ResearchSource[] {
+  return deal.documents
+    .filter(
+      (document) =>
+        ["listing", "cim", "financials"].includes(document.category) &&
+        (document.textExcerpt ||
+          document.extraction?.chunks.some((chunk) => chunk.text.trim()))
+    )
+    .map((document) => {
+      const excerpt =
+        document.textExcerpt ||
+        document.extraction?.chunks
+          .map((chunk) => chunk.text)
+          .join("\n")
+          .slice(0, MAX_SOURCE_CHARS);
+      return {
+        id: `seller_${document.id}`,
+        title: `${document.category.toUpperCase()} — ${document.name}`,
+        excerpt: cleanText(excerpt || ""),
+        accessedAt,
+        kind: "SELLER_MATERIAL" as const,
+      };
+    });
 }
 
 async function searchTavily(
@@ -237,8 +265,9 @@ export function validatedResearchSources(
   return research.sources.filter(
     (source) =>
       allowed.has(source.id) &&
-      Boolean(source.url) &&
-      isSafeCitationUrl(source.url || "")
+      (source.kind === "SELLER_MATERIAL"
+        ? Boolean(source.excerpt)
+        : Boolean(source.url) && isSafeCitationUrl(source.url || ""))
   );
 }
 

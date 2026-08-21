@@ -18,6 +18,25 @@ function q(
   return { id, title, answer, why, known, unknown, next, light, kind, details };
 }
 
+function sellerMemoExcerpt(deal: Deal) {
+  const memo = [...deal.documents]
+    .filter(
+      (document) =>
+        document.category === "cim" &&
+        (document.textExcerpt || document.extraction?.chunks.length)
+    )
+    .sort(
+      (a, b) => Date.parse(b.uploadedAt) - Date.parse(a.uploadedAt)
+    )[0];
+  return (
+    memo?.textExcerpt ||
+    memo?.extraction?.chunks.map((chunk) => chunk.text).join(" ")
+  )
+    ?.replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 600);
+}
+
 export function buildStage1(deal: Deal): Stage1Screening {
   if (!deal.ownerQuestions || deal.ownerQuestions.status !== "complete") {
     throw new Error("STEP 1A — Owner Questions must complete before Step 1B.");
@@ -29,6 +48,7 @@ export function buildStage1(deal: Deal): Stage1Screening {
   const earnMult = multiple(deal.askingPrice, earnings);
   const sdeMargin = deal.sde && deal.revenue ? deal.sde / deal.revenue : null;
   const ffePct = deal.ffe && deal.askingPrice ? deal.ffe / deal.askingPrice : null;
+  const memoExcerpt = sellerMemoExcerpt(deal);
 
   let valuation: Stage1Screening["valuationLabel"] = "Unknown";
   if (earnMult != null) {
@@ -52,20 +72,22 @@ export function buildStage1(deal: Deal): Stage1Screening {
     q(
       1,
       "What does this company actually do?",
-      deal.notes
-        ? `${deal.name} is described as: ${deal.notes} In plain English, they likely sell ${ind.label.toLowerCase()} work to other businesses and get paid when they produce or service that work.`
+      memoExcerpt || deal.notes
+        ? `${deal.name} is described in supplied seller material as: ${memoExcerpt || deal.notes} In plain English, they likely sell ${ind.label.toLowerCase()} work to customers and get paid when they produce or service that work.`
         : `${deal.name} appears to be a ${ind.label.toLowerCase()} business in ${deal.location || "an unspecified location"}. They sell work or products in that category to customers who need it for their own operations. Employees typically quote, produce/service, ship, and invoice. We do not yet have a shop-floor description.`,
       "If we cannot explain the business in one paragraph, we should not buy it.",
       [
         deal.name && `Name: ${deal.name}`,
         deal.industry && `Industry listed: ${deal.industry}`,
         deal.location && `Location: ${deal.location}`,
-        deal.notes && `Listing notes exist`,
+        memoExcerpt
+          ? "Attached CIM excerpt exists"
+          : deal.notes && "Listing notes exist",
       ].filter(Boolean) as string[],
       ["Day-to-day operations", "Exact products/SKUs", "How jobs actually flow through the building"],
       "If the listing is vague, the NDA packet must include photos, equipment list, and a simple process walkthrough.",
-      deal.notes ? "green" : "yellow",
-      deal.notes ? "SELLER_PROVIDED" : "ESTIMATE"
+      memoExcerpt || deal.notes ? "green" : "yellow",
+      memoExcerpt || deal.notes ? "SELLER_PROVIDED" : "ESTIMATE"
     ),
     q(
       2,
