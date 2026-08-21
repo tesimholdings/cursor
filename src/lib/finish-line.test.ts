@@ -1169,6 +1169,25 @@ describe("CIM deal picture and tight copy", () => {
     expect(dealFunnelStep(deal)).toBe(1);
   });
 
+  it("skips CIM disclaimer pages and uses the operating description", () => {
+    const deal = baseDeal();
+    deal.name = "Rich Moe Enterprises";
+    deal.documents.push({
+      id: "rme",
+      dealId: deal.id,
+      name: "Rich-Moe-CIM.pdf",
+      category: "cim",
+      stage: 2,
+      uploadedAt: new Date().toISOString(),
+      size: 20,
+      textExcerpt:
+        "No part of this Offering Memorandum or its contents is intended to provide tax, financial or legal advice. 40 Lake Bellevue Drive. Since company inception in 2001, the shop has worked as a general contractor performing design-build construction for county agencies.",
+    });
+    const picture = buildDealPicture(deal);
+    expect(picture.summary).toMatch(/general contractor/i);
+    expect(picture.summary).not.toMatch(/Offering Memorandum|Lake Bellevue/i);
+  });
+
   it("rebuilds the card from a readable CIM and moves past teaser-only", () => {
     const deal = baseDeal();
     deal.name = "Uniquecoat Technologies";

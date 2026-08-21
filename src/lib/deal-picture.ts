@@ -10,7 +10,7 @@ import { money, multiple } from "./format";
 import { headlineScore } from "./board-scoring";
 import type { Deal, DealPicture, DealPictureFact, DocumentRecord } from "./types";
 
-export const DEAL_PICTURE_VERSION = 2;
+export const DEAL_PICTURE_VERSION = 3;
 
 const BUSINESS_HINT =
   /\b(provides?|manufactur|sells?|specializ|serves?|produces?|offers?|operat|designs?|installs?|customers?|revenue|employees?|injection|thermal spray|landscap|contractor|general contractor)\b/i;
@@ -68,7 +68,7 @@ export function packetText(
 }
 
 const SKIP_PROSE =
-  /page \d+|table of contents|confidential information memorandum|notice of confidentiality|demo cim placeholder|are not provided|tavily public screen|identity: (confirmed|mismatch)|ais tight copy/i;
+  /page \d+|table of contents|confidential information memorandum|notice of confidentiality|demo cim placeholder|are not provided|tavily public screen|identity: (confirmed|mismatch)|ais tight copy|offering memorandum|tax, financial or legal advice|under no conditions|confidential profile|private and confidential|intended only for|www\.|lake bellevue|phone:|fax:|recipient|non-disclosure agreement|do not warrant|serious inquiries only/i;
 
 export function listingProse(deal: Deal, maxSentences = 4) {
   const brief = deal.documents
@@ -92,16 +92,16 @@ export function cimProse(deal: Deal, maxSentences = 4) {
   const raw = packetText(deal, ["cim"]);
   if (!raw || isPlaceholderCim(raw)) return listingProse(deal, maxSentences);
   const parts = raw
-    .split(/(?<=[.!?])\s+/)
+    .split(/(?<=[.!?])\s+|\n+/)
     .map((part) => part.replace(/\s+/g, " ").trim())
     .filter(
       (part) =>
         part.length >= 40 &&
-        part.length <= 320 &&
+        part.length <= 480 &&
         !SKIP_PROSE.test(part)
     );
   const useful = parts.filter((part) => BUSINESS_HINT.test(part));
-  const chosen = (useful.length ? useful : parts).slice(0, maxSentences);
+  const chosen = useful.slice(0, maxSentences);
   return (
     stripLeadingName(chosen.join(" "), deal.name) ||
     listingProse(deal, maxSentences)
