@@ -321,3 +321,37 @@ export function headlineScore(deal: Deal) {
     boardAverage: board.average,
   };
 }
+
+export type BoardSortDirection = "best" | "worst";
+
+function finiteScore(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+export function dealSortScore(
+  deal: Deal,
+  metric: BoardScoreMetric
+): number | null {
+  if (metric === "average") {
+    const hasIc = finiteScore(deal.diligence?.scores?.total) != null;
+    const hasBoard = finiteScore(deal.boardScores?.average) != null;
+    if (!hasIc && !hasBoard) return null;
+    return finiteScore(headlineScore(deal).score);
+  }
+  if (!deal.boardScores) return null;
+  return finiteScore(boardScoreValue(deal, metric));
+}
+
+export function compareDealsForBoard(
+  a: Deal,
+  b: Deal,
+  metric: BoardScoreMetric,
+  direction: BoardSortDirection
+): number {
+  const aScore = dealSortScore(a, metric);
+  const bScore = dealSortScore(b, metric);
+  if (aScore == null && bScore == null) return 0;
+  if (aScore == null) return 1;
+  if (bScore == null) return -1;
+  return direction === "best" ? bScore - aScore : aScore - bScore;
+}

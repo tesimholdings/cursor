@@ -21,8 +21,11 @@ import { DealScanPills } from "@/components/DealScanPills";
 import { BoardScoreStrip } from "@/components/BoardScores";
 import {
   BOARD_SCORE_METRICS,
-  boardScoreValue,
+  compareDealsForBoard,
+  dealSortScore,
+  headlineScore,
   type BoardScoreMetric,
+  type BoardSortDirection,
 } from "@/lib/board-scoring";
 
 type Persistence = { durable: boolean; note: string; error?: string };
@@ -36,6 +39,8 @@ export default function RankingPage() {
   const [query, setQuery] = useState("");
   const [scoreMetric, setScoreMetric] =
     useState<BoardScoreMetric>("average");
+  const [sortDirection, setSortDirection] =
+    useState<BoardSortDirection>("best");
   const [minimumScore, setMinimumScore] = useState("all");
   const [filters, setFilters] = useState({
     call: "all",
@@ -129,16 +134,15 @@ export default function RankingPage() {
       list = list.filter((deal) => dealMatchesSearch(deal, query));
     }
     if (minimumScore !== "all") {
-      list = list.filter(
-        (deal) =>
-          boardScoreValue(deal, scoreMetric) >= Number(minimumScore)
-      );
+      list = list.filter((deal) => {
+        const score = dealSortScore(deal, scoreMetric);
+        return score != null && score >= Number(minimumScore);
+      });
     }
-    return list.sort(
-      (a, b) =>
-        boardScoreValue(b, scoreMetric) - boardScoreValue(a, scoreMetric)
+    return list.sort((a, b) =>
+      compareDealsForBoard(a, b, scoreMetric, sortDirection)
     );
-  }, [deals, bestOnly, filters, query, scoreMetric, minimumScore]);
+  }, [deals, bestOnly, filters, query, scoreMetric, sortDirection, minimumScore]);
 
   return (
     <div className="space-y-6">
@@ -147,8 +151,9 @@ export default function RankingPage() {
           <div className="kicker">Stefan’s broker screen</div>
           <h1 className="serif text-4xl">Which listings deserve an NDA?</h1>
           <p className="mt-2 text-[var(--muted)]">
-            Scan the original pre-NDA score and Good / Bad / Interesting before
-            spending time with the broker.
+            Sort Best or Worst by the headline number — IC score when a CIM IC
+            memo exists, otherwise Board average — then scan Good / Bad /
+            Interesting before spending time with the broker.
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -223,6 +228,41 @@ export default function RankingPage() {
       </div>
 
       <div className="card flex flex-wrap gap-3 rounded-2xl p-4 text-sm">
+        <div
+          role="group"
+          aria-label="Sort deals from best to worst"
+          className="flex items-center gap-2"
+        >
+          Sort
+          <div className="inline-flex overflow-hidden rounded-lg border border-[var(--line)] bg-white">
+            <button
+              type="button"
+              aria-pressed={sortDirection === "best"}
+              title="Highest headline score first"
+              className={`px-3 py-1 font-semibold ${
+                sortDirection === "best"
+                  ? "bg-[var(--navy)] text-[#f7f1e4]"
+                  : "text-[var(--ink)] hover:bg-[var(--paper)]"
+              }`}
+              onClick={() => setSortDirection("best")}
+            >
+              Best
+            </button>
+            <button
+              type="button"
+              aria-pressed={sortDirection === "worst"}
+              title="Lowest headline score first"
+              className={`px-3 py-1 font-semibold ${
+                sortDirection === "worst"
+                  ? "bg-[var(--navy)] text-[#f7f1e4]"
+                  : "text-[var(--ink)] hover:bg-[var(--paper)]"
+              }`}
+              onClick={() => setSortDirection("worst")}
+            >
+              Worst
+            </button>
+          </div>
+        </div>
         <label className="flex items-center gap-2">
           Rank by
           <select
@@ -339,7 +379,7 @@ export default function RankingPage() {
                 "Rank",
                 "Company",
                 "Step",
-                "Average",
+                "Score",
                 "Good",
                 "Bad",
                 "Interesting",
@@ -372,6 +412,7 @@ export default function RankingPage() {
               const earnings = deal.sde || deal.ebitda;
               const askingMultiple = multiple(deal.askingPrice, earnings);
               const screen = brokerScreen(deal);
+              const headline = headlineScore(deal);
               const step = FUNNEL_STEPS.find(
                 (item) => item.key === screen.step
               );
@@ -400,10 +441,16 @@ export default function RankingPage() {
                     </div>
                   </td>
                   <td className="px-3 py-4">
-                    <span className="serif text-2xl">
-                      {screen.score ?? "—"}
-                    </span>
+                    <span className="serif text-2xl">{headline.score}</span>
                     <span className="text-xs text-[var(--muted)]"> / 100</span>
+                    <div className="text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+                      {headline.label}
+                    </div>
+                    {headline.label === "IC score" && (
+                      <div className="text-[10px] text-[var(--muted)]">
+                        Average {headline.boardAverage}
+                      </div>
+                    )}
                     <BoardScoreStrip
                       deal={deal}
                       className="mt-2 max-w-52"

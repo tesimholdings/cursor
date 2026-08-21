@@ -33,6 +33,7 @@ import { buildStage1 } from "./screening";
 import {
   boardScoreValue,
   buildBoardScores,
+  compareDealsForBoard,
   ensureDealBoardScores,
   headlineScore,
 } from "./board-scoring";
@@ -779,6 +780,94 @@ describe("single Board average and six sub-scores", () => {
     expect(headline.label).toBe("IC score");
     expect(headline.score).toBe(deal.diligence.scores.total);
     expect(headline.boardAverage).toBe(deal.boardScores?.average);
+  });
+});
+
+describe("broker board Best / Worst sort", () => {
+  function scoredDeal(
+    name: string,
+    average: number,
+    extras?: { ic?: number; financials?: number }
+  ): Deal {
+    const deal = baseDeal();
+    deal.id = name.toLowerCase().replace(/\s+/g, "-");
+    deal.name = name;
+    deal.boardScores = {
+      average,
+      financials: { score: extras?.financials ?? average, why: "", unknown: false },
+      owner: { score: average, why: "", unknown: false },
+      growth: { score: average, why: "", unknown: false },
+      handsOff: { score: average, why: "", unknown: false },
+      safety: { score: average, why: "", unknown: false },
+      assets: { score: average, why: "", unknown: false },
+    };
+    if (extras?.ic != null) {
+      deal.diligence = {
+        scores: { total: extras.ic },
+      } as Deal["diligence"];
+    } else {
+      delete deal.diligence;
+    }
+    return deal;
+  }
+
+  it("Best ranks the headline IC or Board average high to low", () => {
+    const uniquecoat = scoredDeal("Uniquecoat", 50, { ic: 82 });
+    const listing = scoredDeal("Listing", 61);
+    const passCard = scoredDeal("Pass Seed", 28);
+    const unsorted = [passCard, listing, uniquecoat];
+
+    expect(
+      [...unsorted]
+        .sort((a, b) => compareDealsForBoard(a, b, "average", "best"))
+        .map((deal) => deal.name)
+    ).toEqual(["Uniquecoat", "Listing", "Pass Seed"]);
+    expect(
+      [...unsorted]
+        .sort((a, b) => compareDealsForBoard(a, b, "average", "worst"))
+        .map((deal) => deal.name)
+    ).toEqual(["Pass Seed", "Listing", "Uniquecoat"]);
+  });
+
+  it("keeps unscored deals last in both directions", () => {
+    const high = scoredDeal("High", 70);
+    const low = scoredDeal("Low", 22);
+    const none = baseDeal();
+    none.name = "No Score";
+    delete none.boardScores;
+    delete none.diligence;
+
+    const names = (direction: "best" | "worst") =>
+      [none, high, low]
+        .sort((a, b) => compareDealsForBoard(a, b, "average", direction))
+        .map((deal) => deal.name);
+
+    expect(names("best")).toEqual(["High", "Low", "No Score"]);
+    expect(names("worst")).toEqual(["Low", "High", "No Score"]);
+  });
+
+  it("Worst on a sub-score uses that sub-score, not the headline", () => {
+    const weakFinancials = scoredDeal("Weak Financials", 80, { financials: 20 });
+    const strongFinancials = scoredDeal("Strong Financials", 40, {
+      financials: 90,
+    });
+
+    expect(
+      [weakFinancials, strongFinancials]
+        .sort((a, b) => compareDealsForBoard(a, b, "financials", "worst"))
+        .map((deal) => deal.name)
+    ).toEqual(["Weak Financials", "Strong Financials"]);
+  });
+
+  it("does not overwrite Board average when IC is the headline", () => {
+    const deal = scoredDeal("IC Deal", 47, { ic: 73 });
+    const headline = headlineScore(deal);
+    expect(headline).toMatchObject({
+      label: "IC score",
+      score: 73,
+      boardAverage: 47,
+    });
+    expect(deal.boardScores?.average).toBe(47);
   });
 });
 
