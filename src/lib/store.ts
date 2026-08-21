@@ -6,16 +6,22 @@ import { seedStore } from "./seed";
 
 // Hosted serverless filesystems are read-only apart from a temp directory, so
 // the data directory has to be resolved per environment instead of assuming the
-// repository is writable.
-function resolveDataDir() {
-  if (process.env.ACC_DATA_DIR) return process.env.ACC_DATA_DIR;
-  if (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME) {
-    return path.join(os.tmpdir(), "acquisition-command-center");
+// repository is writable. A temp directory accepts writes but is discarded when
+// the instance recycles, so it is tracked as ephemeral rather than durable.
+function resolveDataDir(): { dir: string; ephemeral: boolean } {
+  if (process.env.ACC_DATA_DIR) {
+    return { dir: process.env.ACC_DATA_DIR, ephemeral: false };
   }
-  return path.join(process.cwd(), "data");
+  if (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME) {
+    return {
+      dir: path.join(os.tmpdir(), "acquisition-command-center"),
+      ephemeral: true,
+    };
+  }
+  return { dir: path.join(process.cwd(), "data"), ephemeral: false };
 }
 
-const DATA_DIR = resolveDataDir();
+const { dir: DATA_DIR, ephemeral: EPHEMERAL_DIR } = resolveDataDir();
 const STORE_PATH = path.join(DATA_DIR, "store.json");
 
 let cache: Store | null = null;
@@ -31,12 +37,15 @@ export interface StorePersistence {
 }
 
 export function storePersistence(): StorePersistence {
+  const writable = durable;
   return {
-    durable,
+    durable: writable && !EPHEMERAL_DIR,
     location: STORE_PATH,
-    note: durable
-      ? "Deal data is written to disk and survives restarts."
-      : "Deal data is being held in memory only. Uploads and screens will reset when this instance recycles or redeploys.",
+    note: !writable
+      ? "Deal data is held in memory only because this filesystem is read-only. Uploads and screens reset when the instance recycles."
+      : EPHEMERAL_DIR
+        ? "Deal data is written to this instance's temporary storage. Uploads and screens reset on redeploy or when the instance recycles. Set ACC_DATA_DIR to a persistent path to keep them."
+        : "Deal data is written to disk and survives restarts.",
     error: lastPersistError,
   };
 }
