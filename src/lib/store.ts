@@ -141,6 +141,13 @@ async function writeLocalStore(store: Store) {
   persistLocal(store);
 }
 
+function backoff(attempt: number) {
+  const ceiling = Math.min(60 * 2 ** attempt, 800);
+  return new Promise((resolve) =>
+    setTimeout(resolve, ceiling / 2 + Math.random() * (ceiling / 2))
+  );
+}
+
 interface BlobStoreSnapshot {
   store: Store;
   etag: string;
@@ -193,7 +200,7 @@ export async function updateStore<T>(
 ): Promise<T> {
   if (blobConfiguration().configured) {
     const run = queue.then(async () => {
-      const attempts = 4;
+      const attempts = 8;
       let lastConflict: BlobStoreSnapshot | undefined;
       for (let attempt = 0; attempt < attempts; attempt += 1) {
         const state = await readOrCreateBlobStore();
@@ -205,12 +212,15 @@ export async function updateStore<T>(
         } catch (error) {
           if (isBlobConflict(error) && attempt < attempts - 1) {
             lastConflict = state;
+            // Writes are serialized per instance but not across instances, so
+            // retrying immediately just collides again with the same peer.
+            await backoff(attempt);
             continue;
           }
-          // Repeated rejections with nothing else writing point at the etag
-          // itself, so report which validator was refused.
+          // Name the refused validator: it separates real contention from an
+          // etag that the API will never accept.
           const message = isBlobConflict(error)
-            ? `Vercel Blob rejected ${attempts} conditional writes in a row (if-match ${
+            ? `Vercel Blob rejected ${attempts} conditional writes in a row, so another writer kept winning (if-match ${
                 lastConflict?.etag ?? state.etag
               }, content etag ${
                 lastConflict?.contentEtag ?? state.contentEtag ?? "none"

@@ -180,12 +180,15 @@ export function isBlobMissing(error: unknown) {
   );
 }
 
+// Concurrent writers are reported in more than one way: a failed precondition
+// when the etag moved, and a conflicting-operation error when another write to
+// the same object is still in flight. Both mean "re-read and try again".
 export function isBlobConflict(error: unknown) {
   return (
     error instanceof BlobPreconditionFailedError ||
     (error instanceof Error &&
       (error.name === "BlobPreconditionFailedError" ||
-        /precondition|etag|already exists/i.test(error.message)))
+        /precondition|etag|already exists|conflict/i.test(error.message)))
   );
 }
 
