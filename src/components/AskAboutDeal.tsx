@@ -38,6 +38,17 @@ function storageKey(dealId: string) {
   return `acc-deal-ask:${dealId}`;
 }
 
+function readThread(dealId: string): ThreadTurn[] {
+  try {
+    const raw = localStorage.getItem(storageKey(dealId));
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as ThreadTurn[];
+    return Array.isArray(parsed) ? parsed.slice(-12) : [];
+  } catch {
+    return [];
+  }
+}
+
 export function AskAboutDeal({
   dealId,
   dealName,
@@ -53,17 +64,9 @@ export function AskAboutDeal({
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(storageKey(dealId));
-      if (raw) {
-        const parsed = JSON.parse(raw) as ThreadTurn[];
-        setTurns(Array.isArray(parsed) ? parsed.slice(-12) : []);
-      } else {
-        setTurns([]);
-      }
-    } catch {
-      setTurns([]);
-    }
+    // Restore the per-deal thread after mount. localStorage is client-only.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setTurns(readThread(dealId));
     setReady(true);
   }, [dealId]);
 

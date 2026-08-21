@@ -76,20 +76,43 @@ const STOPWORDS = new Set([
   "and",
   "about",
   "actually",
+  "all",
+  "also",
+  "any",
+  "are",
   "ask",
+  "been",
+  "being",
   "can",
+  "current",
+  "did",
   "does",
   "for",
   "from",
+  "had",
+  "has",
+  "have",
   "how",
+  "into",
   "is",
   "it",
+  "its",
+  "just",
+  "not",
   "of",
   "on",
   "or",
+  "than",
+  "that",
   "the",
+  "them",
+  "then",
+  "there",
+  "they",
   "this",
   "to",
+  "was",
+  "were",
   "what",
   "when",
   "where",
@@ -396,7 +419,9 @@ export async function answerDealQuestion(
   history: DealAskMessage[] = []
 ): Promise<DealAskResult> {
   const packet = buildDealAskPacket(deal);
-  const hits = searchPacket(packet, question, 8);
+  const hits = searchPacket(packet, question, 8).filter((hit) =>
+    hitContainsQuery(hit, question)
+  );
   const unreadDocuments = packet.unreadDocuments;
   const usedPublicResearch = packet.snippets.some((snippet) =>
     snippet.id.startsWith("research:")
@@ -458,6 +483,8 @@ function searchPacket(
       const matched = tokens.filter((token) => hay.includes(token));
       if (tokens.length && matched.length === tokens.length) score += 6;
       score += matched.length;
+      if (snippet.kind === "document") score += 3;
+      if (snippet.id === "field:notes") score += 2;
       if (!score) return null;
       const excerpt =
         phraseAt >= 0
@@ -479,7 +506,10 @@ function searchPacket(
       };
     })
     .filter((row): row is NonNullable<typeof row> => Boolean(row))
-    .sort((a, b) => b.score - a.score);
+    .sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score;
+      return snippetRank(b.hit.id) - snippetRank(a.hit.id);
+    });
 
   const seen = new Set<string>();
   const hits: DealAskHit[] = [];
@@ -518,8 +548,9 @@ function answerFromPacket(
     return ownershipAnswer(deal, hits, citations);
   }
 
-  if (hits.length) {
-    const first = hits[0];
+  const relevant = hits.filter((hit) => hitContainsQuery(hit, question));
+  if (relevant.length) {
+    const first = relevant[0];
     return {
       answer: `Found in this deal’s packet (${first.title}${
         first.locator ? `, ${first.locator}` : ""
@@ -531,7 +562,7 @@ function answerFromPacket(
           source: first.title,
         },
       ],
-      citations,
+      citations: citationsFrom(packet, relevant),
     };
   }
 
@@ -546,11 +577,16 @@ function realEstateAnswer(
   hits: DealAskHit[],
   citations: DealAskCitation[]
 ): Pick<DealAskResult, "answer" | "claims" | "citations"> {
-  const ownerHit = hits.find((hit) =>
-    /own|title|landlord|lessor|deed|seller owns|owned by|owned separately/i.test(
-      hit.excerpt
-    )
-  );
+  const ownerHit =
+    hits.find((hit) => isOwnershipLanguage(hit.excerpt)) ||
+    (deal.notes && isOwnershipLanguage(deal.notes)
+      ? {
+          id: "field:notes",
+          title: "Deal notes",
+          excerpt: clip(deal.notes, 280),
+          field: "notes",
+        }
+      : undefined);
   const claims: DealAskClaim[] = [
     {
       text: `Listing real-estate-included flag is ${flag(deal.realEstateIncluded)}.`,
@@ -857,27 +893,25 @@ ${question.trim()}`,
   });
 
   const byId = new Map(packet.snippets.map((snippet) => [snippet.id, snippet]));
-  const claims = object.claims
-    .map((claim) => {
-      const sources = claim.sourceIds
-        .map((sourceId) => byId.get(sourceId))
-        .filter((snippet): snippet is PacketSnippet => Boolean(snippet));
-      if (claim.sourceIds.length && !sources.length) return null;
-      const citedText = sources.map((snippet) => snippet.text).join(" ");
-      if (claim.label !== "Unanswered" && !numericClaimsSupported(claim.text, citedText || packet.text)) {
-        return {
-          text: claim.text,
-          label: "Unanswered" as const,
-          source: sources[0]?.title,
-        };
-      }
-      return {
+  const claims = object.claims.flatMap((claim): DealAskClaim[] => {
+    const sources = claim.sourceIds
+      .map((sourceId) => byId.get(sourceId))
+      .filter((snippet): snippet is PacketSnippet => Boolean(snippet));
+    if (claim.sourceIds.length && !sources.length) return [];
+    const citedText = sources.map((snippet) => snippet.text).join(" ");
+    const unsupported =
+      claim.label !== "Unanswered" &&
+      !numericClaimsSupported(claim.text, citedText || packet.text);
+    return [
+      {
         text: claim.text,
-        label: relabelEarnings(claim.text, claim.label),
+        label: unsupported
+          ? "Unanswered"
+          : relabelEarnings(claim.text, claim.label),
         source: sources[0]?.title,
-      };
-    })
-    .filter((claim): claim is DealAskClaim => Boolean(claim));
+      },
+    ];
+  });
 
   const citations = object.citationIds
     .map((sourceId) => byId.get(sourceId))
@@ -1125,6 +1159,28 @@ function isOwnershipQuestion(q: string) {
   return /who owns|owner name|who is the (owner|seller|founder)|ownership/.test(
     q
   ) && !isRealEstateQuestion(q);
+}
+
+function isOwnershipLanguage(text: string) {
+  return /owned separately|owned by|seller owns|title (?:is )?held|landlord is|deed holder|lessor is|available for acquisition/.test(
+    text
+  );
+}
+
+function snippetRank(id: string) {
+  if (id.startsWith("doc:")) return 3;
+  if (id === "field:notes") return 2;
+  if (id.startsWith("qa:")) return 1;
+  return 0;
+}
+
+function hitContainsQuery(hit: DealAskHit, query: string) {
+  const phrase = normalizeSearch(query);
+  const tokens = tokensOf(phrase);
+  const hay = normalizeSearch(`${hit.title} ${hit.excerpt}`);
+  if (!hay) return false;
+  if (phrase.length >= 4 && hay.includes(phrase)) return true;
+  return tokens.some((token) => hay.includes(token));
 }
 
 function push(

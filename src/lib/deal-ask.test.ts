@@ -52,7 +52,7 @@ describe("deal-scoped packet", () => {
     expect(packet.dealId).toBe("deal_uniquecoat");
     expect(packet.text).toContain("Uniquecoat Technologies");
     expect(packet.text).toContain("$4.95M");
-    expect(packet.text).not.toContain("Mighty Molding");
+    expect(packet.text).not.toContain(mighty.name);
     expect(packet.text).not.toContain("$7.25M");
     expect(packet.text).not.toContain("$4.19M");
     expect(packet.text).not.toContain("$1.12M");

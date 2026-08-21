@@ -138,7 +138,7 @@ export function DealClient({ id }: { id: string }) {
 
       <BoardScorePanel deal={deal} />
 
-      <AskAboutDeal dealId={deal.id} dealName={deal.name} />
+      <AskAboutDeal key={deal.id} dealId={deal.id} dealName={deal.name} />
 
       <div className="grid gap-4 md:grid-cols-3">
         <section className="card rounded-2xl p-5 md:col-span-2">
