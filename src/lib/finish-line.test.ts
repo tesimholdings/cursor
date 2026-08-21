@@ -19,7 +19,7 @@ import {
   FUNNEL_STEPS,
 } from "./pipeline";
 import { parsePastedListing } from "./intake";
-import { blobConfiguration } from "./blob-store";
+import { blobConfiguration, normalizeEtag } from "./blob-store";
 import type {
   Deal,
   DocumentRecord,
@@ -328,6 +328,15 @@ describe("shared persistence configuration", () => {
       source: "read-write-token",
       readWriteToken: true,
     });
+  });
+
+  it("reduces an HTTP etag header to the validator ifMatch compares", () => {
+    expect(normalizeEtag('"abc123"')).toBe("abc123");
+    expect(normalizeEtag('W/"abc123"')).toBe("abc123");
+    expect(normalizeEtag("abc123")).toBe("abc123");
+    expect(normalizeEtag('  "abc123" ')).toBe("abc123");
+    expect(normalizeEtag("")).toBeNull();
+    expect(normalizeEtag(null)).toBeNull();
   });
 
   it("stays unconfigured without a store id or a read/write token", () => {

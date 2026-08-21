@@ -141,21 +141,37 @@ async function writeLocalStore(store: Store) {
   persistLocal(store);
 }
 
-async function readOrCreateBlobStore() {
+interface BlobStoreSnapshot {
+  store: Store;
+  etag: string;
+  contentEtag: string | null;
+}
+
+async function readOrCreateBlobStore(): Promise<BlobStoreSnapshot> {
   const current = await readBlobStore();
-  if (current.store) return { store: current.store, etag: current.etag! };
+  if (current.store && current.etag) {
+    return {
+      store: current.store,
+      etag: current.etag,
+      contentEtag: current.contentEtag,
+    };
+  }
 
   const seeded = seedStore();
   try {
     const etag = await writeBlobStore(seeded, null);
-    return { store: seeded, etag };
+    return { store: seeded, etag, contentEtag: null };
   } catch (error) {
     if (!isBlobConflict(error)) throw error;
     const raced = await readBlobStore();
     if (!raced.store || !raced.etag) {
       throw new Error("Blob store initialization raced but no store was found.");
     }
-    return { store: raced.store, etag: raced.etag };
+    return {
+      store: raced.store,
+      etag: raced.etag,
+      contentEtag: raced.contentEtag,
+    };
   }
 }
 
@@ -177,7 +193,9 @@ export async function updateStore<T>(
 ): Promise<T> {
   if (blobConfiguration().configured) {
     const run = queue.then(async () => {
-      for (let attempt = 0; attempt < 6; attempt += 1) {
+      const attempts = 4;
+      let lastConflict: BlobStoreSnapshot | undefined;
+      for (let attempt = 0; attempt < attempts; attempt += 1) {
         const state = await readOrCreateBlobStore();
         const result = await fn(state.store);
         try {
@@ -185,12 +203,25 @@ export async function updateStore<T>(
           lastPersistError = undefined;
           return result;
         } catch (error) {
-          if (isBlobConflict(error) && attempt < 5) continue;
-          lastPersistError =
-            error instanceof Error
+          if (isBlobConflict(error) && attempt < attempts - 1) {
+            lastConflict = state;
+            continue;
+          }
+          // Repeated rejections with nothing else writing point at the etag
+          // itself, so report which validator was refused.
+          const message = isBlobConflict(error)
+            ? `Vercel Blob rejected ${attempts} conditional writes in a row (if-match ${
+                lastConflict?.etag ?? state.etag
+              }, content etag ${
+                lastConflict?.contentEtag ?? state.contentEtag ?? "none"
+              }): ${error instanceof Error ? error.message : String(error)}`
+            : error instanceof Error
               ? error.message
               : "Unknown Vercel Blob write error";
-          throw error;
+          lastPersistError = message;
+          throw error instanceof Error && !isBlobConflict(error)
+            ? error
+            : new Error(message);
         }
       }
       throw new Error("Vercel Blob update retries exhausted.");

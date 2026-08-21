@@ -1,6 +1,8 @@
 import {
+  BlobNotFoundError,
   BlobPreconditionFailedError,
   get,
+  head,
   put,
 } from "@vercel/blob";
 import { getVercelOidcToken, getVercelOidcTokenSync } from "@vercel/oidc";
@@ -25,6 +27,7 @@ export interface BlobConfiguration {
 export interface BlobStoreState {
   store: Store | null;
   etag: string | null;
+  contentEtag: string | null;
 }
 
 export function blobConfiguration(
@@ -103,20 +106,51 @@ export async function probeBlobCredential(): Promise<BlobCredentialProbe> {
   }
 }
 
+// The value delivered as an HTTP `etag` response header is quoted, and may be
+// weak, while `x-if-match` is compared against the store's own etag. Passing the
+// header form straight through makes every conditional write fail with an etag
+// mismatch, so both forms are reduced to the bare validator.
+export function normalizeEtag(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const bare = value
+    .trim()
+    .replace(/^W\//i, "")
+    .replace(/^"(.*)"$/, "$1")
+    .trim();
+  return bare || null;
+}
+
 export async function readBlobStore(): Promise<BlobStoreState> {
+  // `head` is asked first because its etag comes from the metadata API, the
+  // same source `put` compares `ifMatch` against. Reading metadata before
+  // content also fails closed: if the object changes in between, the etag is
+  // already stale and the conditional write is rejected instead of clobbering.
+  let metadataEtag: string | null = null;
+  try {
+    const meta = await head(STORE_PATHNAME, {
+      abortSignal: AbortSignal.timeout(15_000),
+    });
+    metadataEtag = normalizeEtag(meta.etag);
+  } catch (error) {
+    if (!isBlobMissing(error)) throw error;
+    return { store: null, etag: null, contentEtag: null };
+  }
+
   const result = await get(STORE_PATHNAME, {
     access: "private",
     useCache: false,
     abortSignal: AbortSignal.timeout(15_000),
   });
-  if (!result) return { store: null, etag: null };
+  if (!result) return { store: null, etag: null, contentEtag: null };
   if (result.statusCode !== 200) {
     throw new Error(`Unexpected Blob status ${result.statusCode}`);
   }
   const text = await new Response(result.stream).text();
+  const contentEtag = normalizeEtag(result.blob.etag);
   return {
     store: JSON.parse(text) as Store,
-    etag: result.blob.etag,
+    etag: metadataEtag ?? contentEtag,
+    contentEtag,
   };
 }
 
@@ -124,16 +158,26 @@ export async function writeBlobStore(
   store: Store,
   etag: string | null
 ): Promise<string> {
+  const ifMatch = normalizeEtag(etag);
   const result = await put(STORE_PATHNAME, JSON.stringify(store), {
     access: "private",
     addRandomSuffix: false,
-    allowOverwrite: etag !== null,
-    ifMatch: etag || undefined,
+    allowOverwrite: ifMatch !== null,
+    ifMatch: ifMatch || undefined,
     contentType: "application/json",
     cacheControlMaxAge: 60,
     abortSignal: AbortSignal.timeout(15_000),
   });
-  return result.etag;
+  return normalizeEtag(result.etag) ?? result.etag;
+}
+
+export function isBlobMissing(error: unknown) {
+  return (
+    error instanceof BlobNotFoundError ||
+    (error instanceof Error &&
+      (error.name === "BlobNotFoundError" ||
+        /not\s*found|does not exist/i.test(error.message)))
+  );
 }
 
 export function isBlobConflict(error: unknown) {
