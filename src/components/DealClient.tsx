@@ -14,6 +14,8 @@ import { ScoreRing } from "@/components/ScoreRing";
 import { resolveAssigneeName } from "@/lib/assign";
 import { OwnerQuestionsPanel } from "@/components/OwnerQuestionsPanel";
 import { DealScanPills } from "@/components/DealScanPills";
+import { BoardScorePanel } from "@/components/BoardScores";
+import { headlineScore } from "@/lib/board-scoring";
 
 export function DealClient({ id }: { id: string }) {
   const [deal, setDeal] = useState<Deal | null>(null);
@@ -87,6 +89,7 @@ export function DealClient({ id }: { id: string }) {
   const broker = brokerScreen(deal);
   const fullIcReady = canRunFullIc(deal);
   const funnelStep = dealFunnelStep(deal);
+  const headline = headlineScore(deal);
 
   return (
     <div className="space-y-6">
@@ -118,13 +121,21 @@ export function DealClient({ id }: { id: string }) {
           <DealScanPills deal={deal} className="mt-3" />
         </div>
         <div className="flex items-center gap-4">
-          {(s || o) && (
-            <ScoreRing
-              score={d?.scores.total || p?.score || s?.preNdaScore || o?.score || 0}
-            />
-          )}
+          <div className="text-center">
+            <ScoreRing score={headline.score} />
+            <div className="mt-1 text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
+              {headline.label}
+            </div>
+            {headline.label === "IC score" && (
+              <div className="text-xs text-[var(--muted)]">
+                Board average {headline.boardAverage}
+              </div>
+            )}
+          </div>
         </div>
       </div>
+
+      <BoardScorePanel deal={deal} />
 
       <div className="grid gap-4 md:grid-cols-3">
         <section className="card rounded-2xl p-5 md:col-span-2">
@@ -248,6 +259,7 @@ export function DealClient({ id }: { id: string }) {
               {broker.score ?? "—"}
               <span className="text-sm text-[var(--muted)]"> / 100</span>
             </div>
+            <div className="text-xs text-[var(--muted)]">Board average</div>
             <div className="text-sm font-semibold">{broker.call}</div>
           </div>
         </div>

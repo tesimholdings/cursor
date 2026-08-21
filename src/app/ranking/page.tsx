@@ -18,6 +18,12 @@ import {
   dealMatchesSearch,
 } from "@/lib/classification";
 import { DealScanPills } from "@/components/DealScanPills";
+import { BoardScoreStrip } from "@/components/BoardScores";
+import {
+  BOARD_SCORE_METRICS,
+  boardScoreValue,
+  type BoardScoreMetric,
+} from "@/lib/board-scoring";
 
 type Persistence = { durable: boolean; note: string; error?: string };
 
@@ -28,6 +34,9 @@ export default function RankingPage() {
   const [researching, setResearching] = useState(false);
   const [bestOnly, setBestOnly] = useState(false);
   const [query, setQuery] = useState("");
+  const [scoreMetric, setScoreMetric] =
+    useState<BoardScoreMetric>("average");
+  const [minimumScore, setMinimumScore] = useState("all");
   const [filters, setFilters] = useState({
     call: "all",
     category: "all",
@@ -119,10 +128,17 @@ export default function RankingPage() {
     if (query.trim()) {
       list = list.filter((deal) => dealMatchesSearch(deal, query));
     }
+    if (minimumScore !== "all") {
+      list = list.filter(
+        (deal) =>
+          boardScoreValue(deal, scoreMetric) >= Number(minimumScore)
+      );
+    }
     return list.sort(
-      (a, b) => (brokerScreen(b).score || 0) - (brokerScreen(a).score || 0)
+      (a, b) =>
+        boardScoreValue(b, scoreMetric) - boardScoreValue(a, scoreMetric)
     );
-  }, [deals, bestOnly, filters, query]);
+  }, [deals, bestOnly, filters, query, scoreMetric, minimumScore]);
 
   return (
     <div className="space-y-6">
@@ -207,6 +223,39 @@ export default function RankingPage() {
       </div>
 
       <div className="card flex flex-wrap gap-3 rounded-2xl p-4 text-sm">
+        <label className="flex items-center gap-2">
+          Rank by
+          <select
+            aria-label="Score used to rank deals"
+            className="rounded-lg border border-[var(--line)] bg-white px-2 py-1"
+            value={scoreMetric}
+            onChange={(event) =>
+              setScoreMetric(event.target.value as BoardScoreMetric)
+            }
+          >
+            {BOARD_SCORE_METRICS.map((metric) => (
+              <option key={metric.key} value={metric.key}>
+                {metric.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="flex items-center gap-2">
+          Minimum
+          <select
+            aria-label="Minimum selected score"
+            className="rounded-lg border border-[var(--line)] bg-white px-2 py-1"
+            value={minimumScore}
+            onChange={(event) => setMinimumScore(event.target.value)}
+          >
+            <option value="all">Any score</option>
+            {[40, 50, 60, 70, 80].map((score) => (
+              <option key={score} value={score}>
+                {score}+
+              </option>
+            ))}
+          </select>
+        </label>
         <select
           className="rounded-lg border border-[var(--line)] bg-white px-2 py-1"
           value={filters.call}
@@ -290,7 +339,7 @@ export default function RankingPage() {
                 "Rank",
                 "Company",
                 "Step",
-                "Screen",
+                "Average",
                 "Good",
                 "Bad",
                 "Interesting",
@@ -355,6 +404,10 @@ export default function RankingPage() {
                       {screen.score ?? "—"}
                     </span>
                     <span className="text-xs text-[var(--muted)]"> / 100</span>
+                    <BoardScoreStrip
+                      deal={deal}
+                      className="mt-2 max-w-52"
+                    />
                   </td>
                   <ScreenBullet tone="good" text={screen.good} />
                   <ScreenBullet tone="bad" text={screen.bad} />

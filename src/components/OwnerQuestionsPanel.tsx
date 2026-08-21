@@ -3,7 +3,6 @@
 import { useState } from "react";
 import type { Deal, OwnerQuestionReport, PublicResearch } from "@/lib/types";
 import { EvidenceBadge, TrafficDot } from "./EvidenceBadge";
-import { ScoreRing } from "./ScoreRing";
 import { conciseDealQuestions } from "@/lib/deal-brief";
 
 export function OwnerQuestionsPanel({
@@ -30,13 +29,10 @@ export function OwnerQuestionsPanel({
             remains available below for diligence.
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          <ScoreRing score={report.score} />
-          <div>
-            <div className="kicker">Owner score</div>
-            <div className="max-w-48 text-sm font-semibold">
-              {report.decision.replace(/_/g, " ")}
-            </div>
+        <div>
+          <div className="kicker">Owner-question decision</div>
+          <div className="max-w-48 text-sm font-semibold">
+            {report.decision.replace(/_/g, " ")}
           </div>
         </div>
       </div>

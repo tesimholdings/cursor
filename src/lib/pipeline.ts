@@ -1,5 +1,6 @@
 import type { Deal, Store } from "./types";
 import { companyHighlights } from "./deal-brief";
+import { boardScoresFor } from "./board-scoring";
 
 export type BrokerCall = "INQUIRE + NDA" | "NEED MORE" | "PASS";
 export type FunnelStepNumber = 1 | 2 | 3 | 4 | 5;
@@ -67,7 +68,7 @@ export function brokerScreen(deal: Deal) {
   const highlights = companyHighlights(deal);
   return {
     score:
-      deal.screening?.preNdaScore ?? deal.ownerQuestions?.score ?? null,
+      boardScoresFor(deal).average,
     good: highlights.good,
     bad: highlights.bad,
     interesting: highlights.interesting,

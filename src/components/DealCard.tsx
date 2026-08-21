@@ -4,12 +4,15 @@ import { ScoreRing } from "./ScoreRing";
 import Link from "next/link";
 import { brokerCall, dealFunnelStep, FUNNEL_STEPS } from "@/lib/pipeline";
 import { DealScanPills } from "./DealScanPills";
+import { BoardScoreStrip } from "./BoardScores";
+import { headlineScore } from "@/lib/board-scoring";
 
 export function DealCard({ deal }: { deal: Deal }) {
   const earn = deal.sde || deal.ebitda;
   const mult = multiple(deal.askingPrice, earn);
   const rec = deal.diligence?.finalDecision || deal.packet?.decision || deal.screening?.decision;
   const step = FUNNEL_STEPS.find((item) => item.key === dealFunnelStep(deal));
+  const headline = headlineScore(deal);
   return (
     <Link href={`/deals/${deal.id}`} className="card block rounded-2xl p-4 hover:border-[var(--navy)]">
       <div className="flex items-start justify-between gap-3">
@@ -22,20 +25,23 @@ export function DealCard({ deal }: { deal: Deal }) {
             {deal.industry} · {deal.location}
           </div>
         </div>
-        {(deal.screening || deal.ownerQuestions) && (
+        <div className="text-center">
           <ScoreRing
-            score={
-              deal.diligence?.scores.total ||
-              deal.packet?.score ||
-              deal.screening?.preNdaScore ||
-              deal.ownerQuestions?.score ||
-              0
-            }
+            score={headline.score}
             size={56}
           />
-        )}
+          <div className="mt-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+            {headline.label}
+          </div>
+          {headline.label === "IC score" && (
+            <div className="text-[10px] text-[var(--muted)]">
+              Average {headline.boardAverage}
+            </div>
+          )}
+        </div>
       </div>
       <DealScanPills deal={deal} className="mt-3" />
+      <BoardScoreStrip deal={deal} className="mt-3" />
       <dl className="mt-4 grid grid-cols-2 gap-2 text-sm">
         <div>
           <dt className="text-[11px] text-[var(--muted)]">Asking</dt>

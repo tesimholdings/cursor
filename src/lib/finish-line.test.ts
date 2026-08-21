@@ -30,6 +30,12 @@ import {
 import { companyHighlights } from "./deal-brief";
 import { buildOwnerQuestions } from "./owner-questions";
 import { buildStage1 } from "./screening";
+import {
+  boardScoreValue,
+  buildBoardScores,
+  ensureDealBoardScores,
+  headlineScore,
+} from "./board-scoring";
 import type {
   Deal,
   DocumentRecord,
@@ -686,6 +692,93 @@ describe("existing-deal seller material refresh", () => {
     expect(companyHighlights(deal).interesting.join(" ")).toContain(
       "applies protective finishes"
     );
+  });
+});
+
+describe("single Board average and six sub-scores", () => {
+  it("uses the equal-weight rounded average", () => {
+    const deal = baseDeal();
+    ensureDealClassification(deal);
+    const scores = buildBoardScores(deal);
+    const subs = [
+      scores.financials.score,
+      scores.owner.score,
+      scores.growth.score,
+      scores.handsOff.score,
+      scores.safety.score,
+      scores.assets.score,
+    ];
+    expect(scores.average).toBe(
+      Math.round(subs.reduce((sum, score) => sum + score, 0) / subs.length)
+    );
+    expect(ensureDealBoardScores(deal)).toBe(true);
+    expect(ensureDealBoardScores(deal)).toBe(false);
+    expect(boardScoreValue(deal, "average")).toBe(scores.average);
+  });
+
+  it("ranks Hands-off and Safety in opposite directions for gas and painting", () => {
+    const gas = baseDeal();
+    gas.name = "Gas Portfolio";
+    gas.industry = "Gas stations / C-stores";
+    gas.askingPrice = 20_000_000;
+    gas.ffe = null;
+    gas.realEstateIncluded = null;
+    gas.notes = undefined;
+    ensureDealClassification(gas);
+    const gasScores = buildBoardScores(gas);
+
+    const painting = baseDeal();
+    painting.name = "SE Painting";
+    painting.industry = "Commercial painting contractor";
+    painting.askingPrice = 17_900_000;
+    painting.ffe = null;
+    painting.realEstateIncluded = null;
+    painting.notes =
+      "Adjusted EBITDA is seller-provided. Asset-light; equipment is rented.";
+    ensureDealClassification(painting);
+    const paintingScores = buildBoardScores(painting);
+
+    expect(gasScores.handsOff.score).toBeGreaterThan(
+      paintingScores.handsOff.score
+    );
+    expect(gasScores.safety.score).toBeGreaterThan(
+      paintingScores.safety.score
+    );
+    expect(paintingScores.financials.why).toMatch(/Recast/);
+  });
+
+  it("does not score recast or unverified earnings like tax-tied earnings", () => {
+    const make = (notes: string | undefined) => {
+      const deal = baseDeal();
+      deal.name = "Earnings Fixture";
+      deal.notes = notes;
+      ensureDealClassification(deal);
+      return buildBoardScores(deal).financials.score;
+    };
+    const unverified = make(undefined);
+    const recast = make("Adjusted EBITDA includes seller add-backs.");
+    const taxTied = make("Reported earnings reconcile to supplied tax returns.");
+    expect(taxTied).toBeGreaterThan(recast);
+    expect(recast).toBeGreaterThan(unverified);
+  });
+
+  it("caps unknown capacity and keeps IC separate from the Board average", () => {
+    const deal = baseDeal();
+    deal.notes = undefined;
+    ensureDealClassification(deal);
+    ensureDealBoardScores(deal);
+    expect(deal.boardScores?.growth.score).toBeLessThanOrEqual(55);
+    expect(deal.boardScores?.growth.unknown).toBe(true);
+    expect(headlineScore(deal)).toMatchObject({
+      label: "Board score",
+      score: deal.boardScores?.average,
+    });
+
+    deal.diligence = runDiligence(deal);
+    const headline = headlineScore(deal);
+    expect(headline.label).toBe("IC score");
+    expect(headline.score).toBe(deal.diligence.scores.total);
+    expect(headline.boardAverage).toBe(deal.boardScores?.average);
   });
 });
 

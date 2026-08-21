@@ -4,6 +4,7 @@ import os from "os";
 import type { Store } from "./types";
 import { seedStore } from "./seed";
 import { ensureStoreClassifications } from "./classification";
+import { ensureStoreBoardScores } from "./board-scoring";
 import {
   blobConfiguration,
   blobLocation,
@@ -39,6 +40,12 @@ let cache: Store | null = null;
 let durable = true;
 let lastPersistError: string | undefined;
 let queue: Promise<unknown> = Promise.resolve();
+
+function ensureDerivedDealFields(store: Store) {
+  const classificationsChanged = ensureStoreClassifications(store.deals);
+  const scoresChanged = ensureStoreBoardScores(store.deals);
+  return classificationsChanged || scoresChanged;
+}
 
 export interface StorePersistence {
   durable: boolean;
@@ -124,19 +131,19 @@ function persistLocal(store: Store) {
 
 async function readLocalStore(): Promise<Store> {
   if (cache) {
-    if (ensureStoreClassifications(cache.deals)) persistLocal(cache);
+    if (ensureDerivedDealFields(cache)) persistLocal(cache);
     return cache;
   }
   try {
     cache = JSON.parse(fs.readFileSync(STORE_PATH, "utf8")) as Store;
-    if (ensureStoreClassifications(cache.deals)) persistLocal(cache);
+    if (ensureDerivedDealFields(cache)) persistLocal(cache);
     return cache;
   } catch (error) {
     lastPersistError =
       error instanceof Error ? error.message : "Unreadable store file";
   }
   const seeded = seedStore();
-  ensureStoreClassifications(seeded.deals);
+  ensureDerivedDealFields(seeded);
   cache = seeded;
   persistLocal(seeded);
   return seeded;
@@ -165,7 +172,7 @@ async function readOrCreateBlobStore(
 ): Promise<BlobStoreSnapshot> {
   const current = await readBlobStore();
   if (current.store && current.etag) {
-    if (ensureStoreClassifications(current.store.deals)) {
+    if (ensureDerivedDealFields(current.store)) {
       try {
         const etag = await writeBlobStore(current.store, current.etag);
         return {
@@ -189,7 +196,7 @@ async function readOrCreateBlobStore(
   }
 
   const seeded = seedStore();
-  ensureStoreClassifications(seeded.deals);
+  ensureDerivedDealFields(seeded);
   try {
     const etag = await writeBlobStore(seeded, null);
     return { store: seeded, etag, contentEtag: null };
@@ -230,7 +237,7 @@ export async function updateStore<T>(
       for (let attempt = 0; attempt < attempts; attempt += 1) {
         const state = await readOrCreateBlobStore();
         const result = await fn(state.store);
-        ensureStoreClassifications(state.store.deals);
+        ensureDerivedDealFields(state.store);
         try {
           await writeBlobStore(state.store, state.etag);
           lastPersistError = undefined;

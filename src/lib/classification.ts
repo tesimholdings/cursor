@@ -220,7 +220,7 @@ export function earningsQualityFor(
   evidence = fullEvidenceText(deal)
 ): EarningsQuality {
   if (
-    /\b(tax[\s-]?tied|tax (?:return|obi).{0,40}(?:tie|match|reconcil|support)|(?:tie|match|reconcil).{0,40}tax return|ordinary business income.{0,40}(?:tie|match|reconcil))\b/.test(
+    /\b(tax[\s-]?tied|tax (?:returns?|obi).{0,40}(?:tie|match|reconcil|support)|(?:tie|match|reconcil).{0,40}tax returns?|ordinary business income.{0,40}(?:tie|match|reconcil))\b/.test(
       evidence
     )
   ) {

@@ -8,14 +8,22 @@ export function DealScanPills({
   deal: Deal;
   className?: string;
 }) {
-  const computed = classifyDeal(deal);
-  const category = deal.businessCategory || computed.businessCategory;
-  const styles = deal.operatingStyleTags || computed.operatingStyleTags;
-  const risk = deal.riskSnapshot || computed.riskSnapshot;
-  const asset = deal.assetProfile || computed.assetProfile;
-  const box = deal.boxFit || computed.boxFit;
-  const earnings = deal.earningsQuality || computed.earningsQuality;
-  const record = deal.recordTag || computed.recordTag;
+  const complete =
+    deal.businessCategory &&
+    deal.operatingStyleTags?.length &&
+    deal.riskSnapshot &&
+    deal.assetProfile &&
+    deal.boxFit &&
+    deal.earningsQuality &&
+    deal.recordTag;
+  const computed = complete ? null : classifyDeal(deal);
+  const category = deal.businessCategory || computed!.businessCategory;
+  const styles = deal.operatingStyleTags || computed!.operatingStyleTags;
+  const risk = deal.riskSnapshot || computed!.riskSnapshot;
+  const asset = deal.assetProfile || computed!.assetProfile;
+  const box = deal.boxFit || computed!.boxFit;
+  const earnings = deal.earningsQuality || computed!.earningsQuality;
+  const record = deal.recordTag || computed!.recordTag;
 
   return (
     <div className={`flex flex-wrap gap-1.5 text-[11px] font-semibold ${className}`}>

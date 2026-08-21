@@ -71,6 +71,22 @@ export type BoxFit =
 export type EarningsQuality = "Tax-tied" | "Recast" | "Unverified";
 export type RecordTag = "Live" | "Seed / Demo";
 
+export interface BoardSubScore {
+  score: number;
+  why: string;
+  unknown: boolean;
+}
+
+export interface BoardScores {
+  average: number;
+  financials: BoardSubScore;
+  owner: BoardSubScore;
+  growth: BoardSubScore;
+  handsOff: BoardSubScore;
+  safety: BoardSubScore;
+  assets: BoardSubScore;
+}
+
 export interface Fact<T = string | number | boolean | null> {
   value: T;
   kind: EvidenceKind;
@@ -467,6 +483,7 @@ export interface Deal {
   boxFit?: BoxFit;
   earningsQuality?: EarningsQuality;
   recordTag?: RecordTag;
+  boardScores?: BoardScores;
   location: string;
   state?: string;
   askingPrice?: number | null;
