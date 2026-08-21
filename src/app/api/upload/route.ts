@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { parseSpreadsheet, toDeal } from "@/lib/parse-spreadsheet";
 import { updateStore } from "@/lib/store";
+import { storeFailureResponse } from "@/lib/store-response";
 import { id } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
@@ -20,16 +21,24 @@ export async function POST(req: Request) {
     );
   }
   const batchId = id("batch");
-  const created = await updateStore((store) => {
-    const deals = rows.map((r) => toDeal(r, batchId));
-    store.deals.push(...deals);
-    store.batches.unshift({
-      id: batchId,
-      name: file.name,
-      createdAt: new Date().toISOString(),
-      total: deals.length,
+  try {
+    const created = await updateStore((store) => {
+      const deals = rows.map((r) => toDeal(r, batchId));
+      store.deals.push(...deals);
+      store.batches.unshift({
+        id: batchId,
+        name: file.name,
+        createdAt: new Date().toISOString(),
+        total: deals.length,
+      });
+      return deals;
     });
-    return deals;
-  });
-  return NextResponse.json({ batchId, count: created.length, ids: created.map((d) => d.id) });
+    return NextResponse.json({
+      batchId,
+      count: created.length,
+      ids: created.map((d) => d.id),
+    });
+  } catch (error) {
+    return storeFailureResponse(error);
+  }
 }

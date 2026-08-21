@@ -4,6 +4,7 @@ import { id, parseBool, parseMoney, stateFromLocation } from "@/lib/format";
 import { parsePastedListing } from "@/lib/intake";
 import { researchDeal } from "@/lib/research";
 import { updateStore } from "@/lib/store";
+import { storeFailureResponse } from "@/lib/store-response";
 import type { Deal, DocumentRecord } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -123,15 +124,20 @@ export async function POST(request: Request) {
     fatalRisks: [],
   };
 
-  await updateStore((store) => {
-    store.deals.push(deal);
-    store.batches.unshift({
-      id: batchId,
-      name: mode === "paste" ? `${name} — pasted intake` : `${name} — teaser`,
-      createdAt: now,
-      total: 1,
+  try {
+    await updateStore((store) => {
+      store.deals.push(deal);
+      store.batches.unshift({
+        id: batchId,
+        name:
+          mode === "paste" ? `${name} — pasted intake` : `${name} — teaser`,
+        createdAt: now,
+        total: 1,
+      });
     });
-  });
-  const researched = await researchDeal(dealId);
-  return NextResponse.json({ deal: researched }, { status: 201 });
+    const researched = await researchDeal(dealId);
+    return NextResponse.json({ deal: researched }, { status: 201 });
+  } catch (error) {
+    return storeFailureResponse(error);
+  }
 }
