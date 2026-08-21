@@ -1,0 +1,82 @@
+name: Vercel preview
+
+# Publishes a clickable preview URL for every branch push and comments it on the
+# open pull request. The deploy steps stay skipped (and the run stays green)
+# until the three Vercel secrets exist, so this is safe to merge before the
+# project is connected.
+on:
+  push:
+    branches:
+      - "**"
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    env:
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+    steps:
+      # The secrets context is unavailable in `if:` conditions, so the gate has
+      # to be computed inside a step and reused as an output.
+      - name: Check for Vercel credentials
+        id: gate
+        run: |
+          if [ -n "$VERCEL_TOKEN" ] && [ -n "$VERCEL_ORG_ID" ] && [ -n "$VERCEL_PROJECT_ID" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            {
+              echo "## Preview deploy skipped"
+              echo ""
+              echo "Add the repository secrets VERCEL_TOKEN, VERCEL_ORG_ID, and"
+              echo "VERCEL_PROJECT_ID to publish preview URLs automatically."
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - if: steps.gate.outputs.ready == 'true'
+        uses: actions/checkout@v4
+
+      - if: steps.gate.outputs.ready == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Vercel CLI
+        if: steps.gate.outputs.ready == 'true'
+        run: npm install --global vercel@latest
+
+      - name: Pull Vercel environment
+        if: steps.gate.outputs.ready == 'true'
+        run: vercel pull --yes --environment=preview --token="$VERCEL_TOKEN"
+
+      - name: Build
+        if: steps.gate.outputs.ready == 'true'
+        run: vercel build --token="$VERCEL_TOKEN"
+
+      - name: Deploy preview
+        id: deploy
+        if: steps.gate.outputs.ready == 'true'
+        run: |
+          url="$(vercel deploy --prebuilt --token="$VERCEL_TOKEN")"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          {
+            echo "## Acquisition Command Center preview"
+            echo ""
+            echo "$url"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Comment preview URL on the pull request
+        if: steps.gate.outputs.ready == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          URL: ${{ steps.deploy.outputs.url }}
+        run: |
+          pr="$(gh pr list --head "$GITHUB_REF_NAME" --state open --json number --jq '.[0].number')"
+          if [ -n "$pr" ]; then
+            gh pr comment "$pr" --body "Preview for \`${GITHUB_SHA:0:7}\`: $URL"
+          fi
