@@ -2,8 +2,8 @@ import type { Deal, PreNdaDecision, ScreeningQuestion, Stage1Screening, TrafficL
 import { matchIndustry } from "./industry";
 import { money, multiple } from "./format";
 import { scoreStage1 } from "./scoring";
-import { firstSentences, tightenAnswer, unanswered } from "./copy";
-import { cimProse, hasReadableCim, listingProse } from "./deal-picture";
+import { firstSentences, looksLikeOcrDump, tightenAnswer, unanswered } from "./copy";
+import { composeShopSummary, hasReadableCim } from "./deal-picture";
 
 function q(
   id: number,
@@ -74,12 +74,14 @@ export function buildStage1(deal: Deal): Stage1Screening {
     q(
       1,
       "What does this company actually do?",
-      cimProse(deal, 3) ||
-        listingProse(deal, 3) ||
-        firstSentences(deal.notes || "", 3) ||
+      composeShopSummary(deal, 3).summary ||
+        firstSentences(
+          deal.notes && !looksLikeOcrDump(deal.notes) ? deal.notes : "",
+          3
+        ) ||
         unanswered(
           hasReadableCim(deal)
-            ? "a short CIM description of what they sell and who pays"
+            ? "CIM text not parsed"
             : "No CIM on card — listing does not describe the shop"
         ),
       "If we cannot explain the business in one paragraph, we should not buy it.",

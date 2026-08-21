@@ -1,9 +1,12 @@
 import type { Deal, DealPictureFact } from "@/lib/types";
-import { buildDealPicture, hasReadableCim } from "@/lib/deal-picture";
+import { buildDealPicture, hasReadableCim, visibleDealPictureFacts } from "@/lib/deal-picture";
+import { brokerCall } from "@/lib/pipeline";
 
 export function DealPicturePanel({ deal }: { deal: Deal }) {
   const picture = deal.dealPicture || buildDealPicture(deal);
   const cim = hasReadableCim(deal) || picture.status === "from_cim";
+  const facts = visibleDealPictureFacts(picture.facts);
+  const call = deal.diligence?.finalDecision || brokerCall(deal);
   return (
     <section className="card rounded-2xl p-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
@@ -11,38 +14,37 @@ export function DealPicturePanel({ deal }: { deal: Deal }) {
           <div className="kicker">{cim ? "From the CIM" : "Listing screen"}</div>
           <h2 className="serif text-2xl">Deal picture</h2>
         </div>
-        <div className="text-sm font-semibold">
-          {picture.scoreLabel} {picture.score} · {picture.closeSpeed} close
-        </div>
-      </div>
-      <p className="mt-3 max-w-3xl text-sm leading-6">{picture.summary}</p>
-      <div className="mt-4 grid gap-2 md:grid-cols-3">
-        {picture.facts.map((item) => (
-          <FactCard key={item.label} fact={item} />
-        ))}
-      </div>
-      {picture.risks.length > 0 && (
-        <div className="mt-4">
-          <div className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
-            Top risks from the file
+        <div className="text-right text-sm font-semibold">
+          <div>
+            {call} · {picture.scoreLabel} {picture.score}
           </div>
-          <ul className="mt-1 list-disc pl-5 text-sm">
-            {picture.risks.map((risk) => (
-              <li key={risk}>{risk}</li>
+          <div className="text-xs font-medium text-[var(--muted)]">
+            {picture.closeSpeed} close
+          </div>
+        </div>
+      </div>
+      {picture.summary ? (
+        <p className="mt-3 max-w-3xl text-sm leading-6">{picture.summary}</p>
+      ) : (
+        <p className="mt-3 text-sm text-[var(--muted)]">CIM text not parsed.</p>
+      )}
+      {facts.length > 0 && (
+        <table className="mt-4 w-full max-w-xl text-sm">
+          <tbody>
+            {facts.map((item) => (
+              <FactRow key={item.label} fact={item} />
             ))}
-          </ul>
-        </div>
+          </tbody>
+        </table>
       )}
-      {picture.unanswered.length > 0 && (
-        <div className="mt-3 text-sm text-[var(--muted)]">
-          {picture.unanswered.join(" · ")}
-        </div>
-      )}
+      {picture.ugly ? (
+        <p className="mt-4 text-sm font-semibold">{picture.ugly}</p>
+      ) : null}
     </section>
   );
 }
 
-function FactCard({ fact }: { fact: DealPictureFact }) {
+function FactRow({ fact }: { fact: DealPictureFact }) {
   const tone =
     fact.kind === "CIM_FACT"
       ? "text-emerald-900"
@@ -50,14 +52,14 @@ function FactCard({ fact }: { fact: DealPictureFact }) {
         ? "text-amber-950"
         : "text-[var(--muted)]";
   return (
-    <div className="rounded-xl bg-[var(--paper)] p-3">
-      <div className="text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+    <tr className="border-t border-[var(--line)]">
+      <th className="w-36 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
         {fact.label}
-      </div>
-      <div className={`mt-1 text-sm font-semibold ${tone}`}>{fact.value}</div>
-      <div className="text-[10px] uppercase tracking-wide text-[var(--muted)]">
+      </th>
+      <td className={`py-2 font-semibold ${tone}`}>{fact.value}</td>
+      <td className="py-2 text-right text-[10px] uppercase tracking-wide text-[var(--muted)]">
         {fact.kind.replace(/_/g, " ")}
-      </div>
-    </div>
+      </td>
+    </tr>
   );
 }

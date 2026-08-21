@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { isHiddenSample } from "@/lib/classification";
 import { readStore, storeStatus } from "@/lib/store";
 import { funnel, researchProgress } from "@/lib/pipeline";
 
@@ -9,13 +10,14 @@ const NO_STORE = { "Cache-Control": "no-store" };
 export async function GET() {
   try {
     const store = await readStore();
+    const deals = store.deals.filter((deal) => !isHiddenSample(deal));
     return NextResponse.json(
       {
-        deals: store.deals,
+        deals,
         teams: store.teams,
-        batches: store.batches,
-        funnel: funnel(store.deals),
-        research: researchProgress(store),
+        batches: store.batches.filter((batch) => batch.id !== "batch_seed"),
+        funnel: funnel(deals),
+        research: researchProgress({ ...store, deals }),
         persistence: await storeStatus(),
       },
       { headers: NO_STORE }

@@ -5,7 +5,7 @@ import { buildOwnerQuestions } from "./owner-questions";
 import { researchCompany } from "./public-research";
 import { refreshDealFromDocuments } from "./refresh-deal";
 import { firstSentences } from "./copy";
-import { cimProse, hasReadableCim } from "./deal-picture";
+import { composeShopSummary, hasReadableCim } from "./deal-picture";
 
 const ADVANCED = new Set([
   "nda_requested",
@@ -44,8 +44,10 @@ export async function researchNext(limit = 3) {
         );
         if (deal.ownerQuestions && hasReadableCim(deal)) {
           deal.ownerQuestions.companyBrief = firstSentences(
-            cimProse(deal, 5) || deal.ownerQuestions.companyBrief || "",
-            5
+            composeShopSummary(deal, 3).summary ||
+              deal.ownerQuestions.companyBrief ||
+              "",
+            3
           );
         }
         const screening = buildStage1(deal);
@@ -94,8 +96,10 @@ export async function researchDeal(id: string, options: { force?: boolean } = {}
     );
     if (deal.ownerQuestions && hasReadableCim(deal)) {
       deal.ownerQuestions.companyBrief = firstSentences(
-        cimProse(deal, 5) || deal.ownerQuestions.companyBrief || "",
-        5
+        composeShopSummary(deal, 3).summary ||
+          deal.ownerQuestions.companyBrief ||
+          "",
+        3
       );
     }
     const screening = buildStage1(deal);

@@ -5,13 +5,13 @@ import {
   defaultWhy,
   firstSentences,
   isTemplateWhy,
+  looksLikeOcrDump,
   tightenAnswer,
   unanswered as unansweredItem,
 } from "./copy";
 import {
-  cimProse,
+  composeShopSummary,
   hasReadableCim,
-  listingProse,
   packetText,
   printedConcentration,
 } from "./deal-picture";
@@ -210,20 +210,21 @@ export function buildOwnerQuestions(deal: Deal): OwnerQuestionReport {
     make(
       deal,
       1,
-      cimProse(deal, 3) ||
-        listingProse(deal, 3) ||
+      composeShopSummary(deal, 3).summary ||
         firstSentences(
-          deal.notes ||
+          (!looksLikeOcrDump(deal.notes) && deal.notes) ||
             unansweredItem(
-              "what they sell, who pays, and how work moves through the shop"
+              hasReadableCim(deal)
+                ? "CIM text not parsed"
+                : "what they sell, who pays, and how work moves through the shop"
             ),
           3
         ),
       {
-        light: hasReadableCim(deal) || Boolean(listingProse(deal, 1) || deal.notes)
+        light: composeShopSummary(deal, 1).summary || (deal.notes && !looksLikeOcrDump(deal.notes))
           ? "green"
           : "yellow",
-        kind: hasReadableCim(deal) || Boolean(listingProse(deal, 1) || deal.notes)
+        kind: composeShopSummary(deal, 1).summary || (deal.notes && !looksLikeOcrDump(deal.notes))
           ? "SELLER_PROVIDED"
           : "NOT_PROVIDED",
         known: [
@@ -613,14 +614,11 @@ export function buildOwnerQuestions(deal: Deal): OwnerQuestionReport {
     decisionWhy,
     researchStatus: deal.publicResearch?.status,
     companyBrief: firstSentences(
-      cimProse(deal, 5) ||
-        listingProse(deal, 5) ||
+      composeShopSummary(deal, 3).summary ||
         (hasReadableCim(deal)
-          ? unansweredItem(
-              "a 3–5 sentence CIM picture of what they sell, who pays, how it runs, and the ugly"
-            )
-          : "No CIM on card. This is a listing / teaser screen only — do not underwrite a book that is not here."),
-      5
+          ? unansweredItem("CIM text not parsed")
+          : "No CIM on card."),
+      3
     ),
   };
 }

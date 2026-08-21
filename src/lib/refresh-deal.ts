@@ -52,7 +52,7 @@ export function refreshDealFromDocuments(
   if (deal.ownerQuestions) {
     deal.ownerQuestions.companyBrief = firstSentences(
       picture.summary || deal.ownerQuestions.companyBrief || "",
-      5
+      3
     );
   }
   const nextNotes = tightenStoredNotes(deal, picture.summary);

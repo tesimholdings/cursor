@@ -10,10 +10,10 @@ import { money, multiple } from "./format";
 import { headlineScore } from "./board-scoring";
 import type { Deal, DealPicture, DealPictureFact, DocumentRecord } from "./types";
 
-export const DEAL_PICTURE_VERSION = 5;
+export const DEAL_PICTURE_VERSION = 6;
 
 const BUSINESS_HINT =
-  /\b(provides?|manufactur|sells?|specializ|serves?|produces?|offers?|operat|designs?|installs?|customers?|revenue|employees?|injection|thermal spray|landscap|contractor|general contractor)\b/i;
+  /\b(provides?|manufactur|sells?|specializ|serves?|produces?|offers?|operat|designs?|installs?|customers?|revenue|employees?|injection|thermal spray|landscap|contractor|general contractor|hvaf|powder feeder)\b/i;
 
 export function hasReadableCim(deal: Deal) {
   return deal.documents.some(
@@ -37,17 +37,6 @@ function documentText(document: DocumentRecord) {
       readableDocumentText(document.extraction?.chunks || [])
     ).replace(/\s+/g, " ")
   ).trim();
-}
-
-function isHeaderJunk(part: string) {
-  const compact = part.replace(/\s+/g, "");
-  if (/confidentialinformation|tableofcontents|preparedforqualifiedbuyers/i.test(compact)) {
-    return true;
-  }
-  if (/^confidential/i.test(part) && !BUSINESS_HINT.test(part)) return true;
-  const letters = part.replace(/[^A-Za-z]/g, "");
-  const caps = part.replace(/[^A-Z]/g, "");
-  return letters.length > 20 && caps.length / letters.length > 0.55;
 }
 
 export function isPlaceholderCim(text: string) {
@@ -80,20 +69,72 @@ export function packetText(
     .trim();
 }
 
-const SKIP_PROSE =
-  /page \d+|table of contents|confidential information memorandum|notice of confidentiality|demo cim placeholder|are not provided|tavily public screen|identity: (confirmed|mismatch)|ais tight copy|offering memorandum|tax, financial or legal advice|under no conditions|confidential profile|private and confidential|intended only for|www\.|lake bellevue|phone:|fax:|recipient|non-disclosure agreement|do not warrant|serious inquiries only/i;
+const SHOP_LINES: Array<{ pattern: RegExp; sell: string; pay?: string }> = [
+  {
+    pattern: /hvaf|thermal spray|powder feeder/i,
+    sell: "They sell HVAF spray systems and powder feeders.",
+    pay: "Industrial plants pay for the equipment and for job-shop coating.",
+  },
+  {
+    pattern: /injection mold|plastic injection/i,
+    sell: "They injection-mold plastic parts.",
+    pay: "Industrial and OEM customers pay for the molded parts.",
+  },
+  {
+    pattern: /landscap|hardscape|irrigation/i,
+    sell: "They do landscaping, hardscape, and irrigation.",
+    pay: "Builders and homeowners pay.",
+  },
+  {
+    pattern: /general contractor|design[\s-]build construction/i,
+    sell: "They run a design-build general contracting shop.",
+    pay: "County, school, and federal owners pay.",
+  },
+  {
+    pattern: /protective finish|industrial coating/i,
+    sell: "They apply protective finishes for industrial customers.",
+  },
+];
 
-export function listingProse(deal: Deal, maxSentences = 4) {
+function shopLocation(deal: Deal, text: string) {
+  const printed = text.match(
+    /\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?),\s*(VA|TX|MD|WA|OH|FL|NC|SC|GA|PA|NY|CA)\b/
+  );
+  if (printed) return `The shop runs in ${printed[1]}, ${printed[2]}.`;
+  if (deal.location) return `The shop runs in ${deal.location}.`;
+  return "";
+}
+
+function uglyLine(text: string) {
+  if (/inventor|founder.{0,40}key|key[-\s]?person/i.test(text)) {
+    return "Ugly: founder-inventor key-person, not a plant hall.";
+  }
+  if (/customer[\s-]owned (?:molds?|tooling)|customers own their patented molds/i.test(text)) {
+    return "Ugly: customer-owned molds / tooling.";
+  }
+  if (
+    /government[\s-]?(?:contractor|gc|project)|county government|federal government|set[\s-]?aside/i.test(
+      text
+    )
+  ) {
+    return "Ugly: government / public-sector work — Slow close.";
+  }
+  if (/franchise/i.test(text)) return "Ugly: franchise language is in the file.";
+  return "";
+}
+
+export function listingProse(deal: Deal, maxSentences = 2) {
   const brief = deal.documents
     .filter((document) => document.category === "listing")
     .map((document) => documentText(document))
     .map((text) => {
-      const briefMatch = text.match(/\bBRIEF\s+(.{80,700})/i);
-      return (briefMatch?.[1] || text).replace(/\s+/g, " ").trim();
+      const briefMatch = text.match(/\bBRIEF\s+(.{40,320})/i);
+      return (briefMatch?.[1] || "").replace(/\s+/g, " ").trim();
     })
     .find(
       (text) =>
-        text.length >= 60 &&
+        text &&
+        !looksLikeOcrDump(text) &&
         BUSINESS_HINT.test(text) &&
         !/tavily public screen|identity: (confirmed|mismatch)/i.test(text)
     );
@@ -101,25 +142,45 @@ export function listingProse(deal: Deal, maxSentences = 4) {
   return firstSentences(stripLeadingName(brief, deal.name), maxSentences);
 }
 
-export function cimProse(deal: Deal, maxSentences = 4) {
-  const raw = packetText(deal, ["cim"]);
-  if (!raw || isPlaceholderCim(raw)) return listingProse(deal, maxSentences);
-  const parts = raw
-    .split(/(?<=[.!?])\s+|\n+|SECTION\s+[IVX]+|Executive Summary/i)
-    .map((part) => part.replace(/\s+/g, " ").trim())
-    .filter(
-      (part) =>
-        part.length >= 40 &&
-        part.length <= 480 &&
-        !SKIP_PROSE.test(part) &&
-        !isHeaderJunk(part)
-    );
-  const useful = parts.filter((part) => BUSINESS_HINT.test(part));
-  const chosen = useful.slice(0, maxSentences);
-  return (
-    stripLeadingName(chosen.join(" "), deal.name) ||
-    listingProse(deal, maxSentences)
-  );
+/** Composed shop line only — never a CIM/OCR paste. */
+export function cimProse(deal: Deal, maxSentences = 3) {
+  return composeShopSummary(deal, maxSentences).summary;
+}
+
+export function composeShopSummary(deal: Deal, maxSentences = 3) {
+  const cim = hasReadableCim(deal);
+  const text = packetText(deal, cim ? ["cim", "financials"] : ["listing"]);
+  if (cim && looksLikeOcrDump(text) && !SHOP_LINES.some((line) => line.pattern.test(text))) {
+    return { summary: "", parsed: false, ugly: "" };
+  }
+  const match = SHOP_LINES.find((line) => line.pattern.test(text));
+  if (cim && !match) {
+    const listing = listingProse(deal, 2);
+    if (listing && !looksLikeOcrDump(listing)) {
+      return {
+        summary: firstSentences(`No CIM parse. ${listing}`, maxSentences),
+        parsed: false,
+        ugly: uglyLine(text),
+      };
+    }
+    return { summary: "", parsed: false, ugly: uglyLine(text) };
+  }
+  const location = shopLocation(deal, text);
+  const ugly = uglyLine(text);
+  const parts = match
+    ? [match.sell, match.pay, location].filter(Boolean)
+    : listingProse(deal, 2)
+      ? [listingProse(deal, 2)]
+      : deal.notes &&
+          !looksLikeOcrDump(deal.notes) &&
+          !/appears to sell/i.test(deal.notes)
+        ? [firstSentences(stripLeadingName(deal.notes, deal.name), 1)]
+        : [];
+  const summary = firstSentences(parts.join(" "), maxSentences);
+  if (looksLikeOcrDump(summary) || /confidential|offering memorandum|lake bellevue/i.test(summary)) {
+    return { summary: "", parsed: false, ugly };
+  }
+  return { summary, parsed: Boolean(match || summary), ugly };
 }
 
 export function printedConcentration(text: string) {
@@ -144,47 +205,49 @@ function fact(
   return { label, value, kind, source };
 }
 
-function moneyFact(
-  label: string,
-  listing: number | null | undefined,
-  packet: number | null,
-  source?: string
-): DealPictureFact {
-  if (packet != null) {
-    return fact(label, money(packet), "CIM_FACT", source);
-  }
-  if (listing != null) {
-    return fact(label, `${money(listing)} (Seller Claim)`, "SELLER_CLAIM");
-  }
-  return fact(label, unanswered("no printed figure"), "UNANSWERED");
+function toAmount(raw: string, suffix?: string) {
+  let value = Number(raw.replace(/,/g, ""));
+  const tag = (suffix || "").toLowerCase();
+  if (tag === "k") value *= 1_000;
+  if (tag === "m" || tag === "million") value *= 1_000_000;
+  return value;
 }
 
-function locateMoney(text: string, labels: string[]) {
-  for (const label of labels) {
-    const matches = text.matchAll(
-      new RegExp(
-        `${label}[^\\d$%]{0,28}(\\$)?\\s*([0-9][0-9,]*(?:\\.\\d+)?)(\\s*(m|k|million))?`,
-        "gi"
-      )
-    );
-    for (const match of matches) {
-      const tail = text.slice(
-        (match.index || 0) + match[0].length,
-        (match.index || 0) + match[0].length + 3
-      );
-      if (/%/.test(tail) || /[–-]/.test(tail)) continue;
-      const raw = match[2];
-      const hasDollar = Boolean(match[1]);
-      const hasComma = raw.includes(",");
-      const suffix = (match[4] || "").toLowerCase();
-      if (!hasDollar && !hasComma && !suffix) continue;
-      let value = Number(raw.replace(/,/g, ""));
-      if (suffix === "k") value *= 1_000;
-      if (suffix === "m" || suffix === "million") value *= 1_000_000;
-      if (value >= 10_000) return value;
-    }
+function labeledAmounts(text: string, labels: string[]) {
+  const found: number[] = [];
+  const label = labels.join("|");
+  const after = new RegExp(
+    `(?:${label})[^\\d$%]{0,28}\\$\\s*([0-9][0-9,]*(?:\\.\\d+)?)\\s*(m|million|k)?`,
+    "gi"
+  );
+  const before = new RegExp(
+    `\\$\\s*([0-9][0-9,]*(?:\\.\\d+)?)\\s*(m|million|k)?[^$.]{0,40}(?:${label})`,
+    "gi"
+  );
+  for (const match of text.matchAll(before)) {
+    const value = toAmount(match[1], match[2]);
+    if (value >= 10_000) found.push(value);
   }
-  return null;
+  for (const match of text.matchAll(after)) {
+    const value = toAmount(match[1], match[2]);
+    if (value >= 10_000) found.push(value);
+  }
+  return found;
+}
+
+function locateMoney(text: string, labels: string[], exclude: number[] = []) {
+  return (
+    labeledAmounts(text, labels).find((value) => !exclude.includes(value)) ??
+    null
+  );
+}
+
+function answered(item: DealPictureFact | null): item is DealPictureFact {
+  return Boolean(item && item.kind !== "UNANSWERED");
+}
+
+export function visibleDealPictureFacts(facts: DealPictureFact[]) {
+  return facts.filter((item) => item.kind !== "UNANSWERED");
 }
 
 export function buildDealPicture(deal: Deal): DealPicture {
@@ -193,168 +256,122 @@ export function buildDealPicture(deal: Deal): DealPicture {
   const cimText = packetText(deal, ["cim"]);
   const close = closeSpeedFor(deal);
   const headline = headlineScore(deal);
-  if (!cim) {
-    return {
-      version: DEAL_PICTURE_VERSION,
-      status: "no_cim",
-      summary: listingProse(deal, 2)
-        ? `No CIM on card. Listing / teaser screen only. ${listingProse(deal, 2)}`
-        : "No CIM on card. This is a listing / teaser screen only — do not underwrite a book that is not here.",
-      facts: [
-        moneyFact("Asking price", deal.askingPrice, null),
-        moneyFact("Revenue", deal.revenue, null),
-        moneyFact("SDE", deal.sde, null),
-        moneyFact("EBITDA", deal.ebitda, null),
-        fact(
-          "Close speed",
-          close,
-          "UNANSWERED",
-          "Time-to-close after LOI, not quality."
-        ),
-      ],
-      risks: [],
-      unanswered: [
-        "CIM / confidential information memorandum",
-        "Who pays, and whether any customer % is printed",
-        "Owner hours and whether the shop runs without the seller",
-        "Whether listed earnings tie to tax returns",
-      ],
-      rebuiltAt: new Date().toISOString(),
-      scoreLabel: headline.label,
-      score: headline.score,
-      closeSpeed: close,
-    };
-  }
+  const composed = composeShopSummary(deal, 3);
+  const recast = /\b(add[\s-]?backs?|recast|adjusted (?:ebitda|sde)|normalized (?:ebitda|sde)|trailing 3[\s-]?year avg sde)\b/i.test(
+    text
+  );
 
-  const packetAsk = locateMoney(cimText, ["asking price", "sale price", "purchase price"]);
-  const packetRev = locateMoney(cimText, ["revenue", "sales", "ttm"]);
   const packetSde = locateMoney(cimText, [
-    "sde",
+    "trailing 3[\\s-]*year avg(?:erage)? sde",
+    "t3 avg sde",
     "seller.?s discretionary",
     "seller discretionary",
-    "owner benefit",
+    "adjusted sde",
+    "\\bsde\\b",
   ]);
-  const packetEbitda = locateMoney(cimText, ["ebitda"]);
+  const packetRev = locateMoney(
+    cimText,
+    [
+      "trailing 3[\\s-]*year avg(?:erage)? revenue",
+      "t3 avg revenue",
+      "ttm revenue",
+      "annual revenue",
+      "\\brevenue\\b",
+    ],
+    packetSde != null ? [packetSde] : []
+  );
+  const packetAsk = locateMoney(cimText, [
+    "asking price",
+    "sale price",
+    "purchase price",
+  ]);
+  const packetEbitda = locateMoney(cimText, ["\\bebitda\\b"], [
+    ...(packetSde != null ? [packetSde] : []),
+    ...(packetRev != null ? [packetRev] : []),
+  ]);
   const ask = packetAsk ?? deal.askingPrice ?? null;
   const earnings = packetSde ?? packetEbitda ?? deal.sde ?? deal.ebitda ?? null;
   const askMultiple = multiple(ask, earnings);
   const concentration = printedConcentration(text);
-  const cimEmployees = text.match(
-    /\b(\d{1,3})\s*(?:full[\s-]?time\s+)?employees?\b/i
-  )?.[1];
-  const employees =
-    cimEmployees || (deal.employees != null ? String(deal.employees) : null);
-  const ownerHours = text.match(
-    /\b(?:owner|seller).{0,40}(\d{1,3})\s*(?:hours?\/week|hours a week|hrs\/wk)\b/i
-  );
-  const recast = /\b(add[\s-]?backs?|recast|adjusted (?:ebitda|sde)|normalized (?:ebitda|sde))\b/i.test(
-    text
-  );
+  const peopleMatch =
+    text.match(/\b(\d{1,3})\s*(?:full[\s-]?time|ft)\s*employees?\b/i) ||
+    text.match(/\b(\d{1,3})FULL-TIME\s*EMPLOYEES\b/i) ||
+    text.match(/\b(\d{1,3})\s+employees?\b/i);
+  const people = peopleMatch?.[1];
   const reSplit = /real estate only[^$]{0,12}\$?\s*([0-9,.]+)|business only[^$]{0,12}\$?\s*([0-9,.]+)/i.exec(
     text
   );
 
-  const summary = firstSentences(
-    cimProse(deal, 5) ||
-      "Seller CIM is on the card, but the extracted text does not yet yield a clean operating description.",
-    5
-  );
-
-  const risks = [
-    recast ? "Listed earnings are recast / add-back math — Seller Claim until tax-tied." : "",
-    /customer[\s-]owned (?:molds?|tooling)|customers own their patented molds/i.test(text)
-      ? "Customer-owned molds / tooling called out in the CIM."
-      : "",
-    /government[\s-]?(?:contractor|gc|project)|county government|federal government|set[\s-]?aside|8\(a\)\b|\bwbe\b|\bmbe\b/i.test(
-      text
-    )
-      ? "Government / public-sector work is in the CIM — treat close speed as Slow."
-      : "",
-    /franchise/i.test(text) ? "Franchise language is in the CIM." : "",
-    concentration ? `Printed concentration: ${concentration}.` : "",
-  ].filter(Boolean);
+  const facts = [
+    ask != null
+      ? fact(
+          "Ask",
+          packetAsk != null
+            ? money(packetAsk)
+            : `${money(deal.askingPrice)} (Seller Claim)`,
+          packetAsk != null ? "CIM_FACT" : "SELLER_CLAIM"
+        )
+      : fact("Ask", unanswered("no printed figure"), "UNANSWERED"),
+    packetRev != null
+      ? fact("Revenue", money(packetRev), "CIM_FACT")
+      : deal.revenue != null
+        ? fact("Revenue", `${money(deal.revenue)} (Seller Claim)`, "SELLER_CLAIM")
+        : fact("Revenue", unanswered("no printed figure"), "UNANSWERED"),
+    earnings != null
+      ? fact(
+          "Earnings",
+          `${money(packetSde ?? packetEbitda ?? deal.sde ?? deal.ebitda)}${
+            recast || packetSde != null
+              ? " (Seller Claim — recast)"
+              : packetSde == null && deal.sde != null
+                ? " (Seller Claim)"
+                : ""
+          }`,
+          recast || packetSde != null || (packetEbitda == null && deal.sde != null)
+            ? "SELLER_CLAIM"
+            : "CIM_FACT"
+        )
+      : fact("Earnings", unanswered("no printed figure"), "UNANSWERED"),
+    askMultiple != null
+      ? fact("Multiple", `${askMultiple.toFixed(1)}x listed earnings`, "CIM_FACT")
+      : fact("Multiple", unanswered("need ask and earnings"), "UNANSWERED"),
+    people
+      ? fact("People", `${people} FT`, "CIM_FACT")
+      : deal.employees != null
+        ? fact("People", `${deal.employees} (Seller Claim)`, "SELLER_CLAIM")
+        : fact("People", unanswered("headcount"), "UNANSWERED"),
+    concentration
+      ? fact("Concentration", concentration, "CIM_FACT")
+      : fact("Concentration", unanswered("no printed customer %"), "UNANSWERED"),
+    reSplit
+      ? fact("RE", "CIM split printed (RE / business)", "CIM_FACT")
+      : deal.realEstateIncluded === true
+        ? fact("RE", "Listing says RE included — Seller Claim", "SELLER_CLAIM")
+        : deal.realEstateIncluded === false
+          ? fact("RE", "Listing says no real estate in the ask", "SELLER_CLAIM")
+          : fact("RE", unanswered("RE vs business split"), "UNANSWERED"),
+    fact("Close speed", `${close} close`, "CIM_FACT"),
+  ].filter(answered);
 
   const unansweredItems = [
-    !concentration ? "Top-customer % — not printed in the CIM" : "",
-    !ownerHours ? "Owner hours / who runs a week without the seller" : "",
-    recast ? "Tax-return tie-out for recast SDE" : "",
-    deal.realEstateIncluded == null ? "Whether real estate is in the ask" : "",
+    cim && !composed.parsed ? "CIM text not parsed" : "",
+    !cim ? "CIM / confidential information memorandum" : "",
+    !concentration ? "Top-customer % — not printed" : "",
   ].filter(Boolean);
+
+  const summary = cim
+    ? composed.summary
+    : composed.summary
+      ? `No CIM on card. ${firstSentences(composed.summary, 2)}`
+      : "No CIM on card.";
 
   return {
     version: DEAL_PICTURE_VERSION,
-    status: "from_cim",
+    status: cim ? "from_cim" : "no_cim",
     summary,
-    facts: [
-      moneyFact("Asking price", deal.askingPrice, packetAsk, "CIM"),
-      moneyFact("Revenue", deal.revenue, packetRev, "CIM"),
-      fact(
-        "SDE",
-        packetSde != null
-          ? `${money(packetSde)}${recast ? " (Seller Claim — recast / add-backs)" : ""}`
-          : deal.sde != null
-            ? `${money(deal.sde)} (Seller Claim)`
-            : unanswered("no printed figure"),
-        recast || (packetSde == null && deal.sde != null)
-          ? "SELLER_CLAIM"
-          : packetSde != null
-            ? "CIM_FACT"
-            : "UNANSWERED",
-        recast ? "CIM recast" : packetSde != null ? "CIM" : undefined
-      ),
-      moneyFact("EBITDA", deal.ebitda, packetEbitda, "CIM"),
-      fact(
-        "Multiple",
-        askMultiple != null ? `${askMultiple.toFixed(1)}x listed earnings` : unanswered("need ask and earnings"),
-        askMultiple != null ? "CIM_FACT" : "UNANSWERED"
-      ),
-      fact(
-        "RE vs business",
-        reSplit
-          ? `CIM split printed (RE / business). Listing RE: ${
-              deal.realEstateIncluded === true
-                ? "included"
-                : deal.realEstateIncluded === false
-                  ? "not included"
-                  : "unanswered"
-            }`
-          : deal.realEstateIncluded === true
-            ? "Listing says RE included — Seller Claim until a CIM allocation."
-            : deal.realEstateIncluded === false
-              ? "Listing says no real estate in the ask."
-              : unanswered("RE vs business split"),
-        reSplit ? "CIM_FACT" : deal.realEstateIncluded == null ? "UNANSWERED" : "SELLER_CLAIM"
-      ),
-      fact(
-        "Employees",
-        employees || unanswered("headcount"),
-        cimEmployees ? "CIM_FACT" : employees ? "SELLER_CLAIM" : "UNANSWERED"
-      ),
-      fact(
-        "Owner hours",
-        ownerHours ? `${ownerHours[1]} hours/week (CIM)` : unanswered("owner hours"),
-        ownerHours ? "CIM_FACT" : "UNANSWERED"
-      ),
-      fact(
-        "Concentration",
-        concentration || unanswered("no printed customer %"),
-        concentration ? "CIM_FACT" : "UNANSWERED"
-      ),
-      fact(
-        "Earnings quality",
-        recast
-          ? "Recast / add-backs — Seller Claim, not tax-tied"
-          : "No recast language printed; still not tax-tied unless a tax/QoE file is on the card",
-        recast ? "SELLER_CLAIM" : "UNANSWERED"
-      ),
-      fact("Close speed", `${close} close`, "CIM_FACT"),
-      fact(
-        headline.label,
-        `${headline.score} / 100`,
-        "CIM_FACT"
-      ),
-    ],
-    risks,
+    ugly: composed.ugly || undefined,
+    facts,
+    risks: composed.ugly ? [composed.ugly] : [],
     unanswered: unansweredItems,
     rebuiltAt: new Date().toISOString(),
     scoreLabel: headline.label,
@@ -372,9 +389,9 @@ export function shouldRefreshDealPicture(deal: Deal) {
 }
 
 export function tightenStoredNotes(deal: Deal, summary: string) {
-  if (!deal.notes) return summary || deal.notes;
-  if (looksLikeOcrDump(deal.notes) || /^[A-Z][^.]*LLC|^[A-Z].{0,40}appears to/i.test(deal.notes)) {
-    return firstSentences(summary || stripLeadingName(deal.notes, deal.name), 4);
+  if (looksLikeOcrDump(deal.notes)) {
+    return summary || undefined;
   }
+  if (!deal.notes) return summary || deal.notes;
   return deal.notes;
 }

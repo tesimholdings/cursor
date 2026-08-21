@@ -17,6 +17,7 @@ import {
   OPERATING_STYLES,
   classifyDeal,
   dealMatchesSearch,
+  isHiddenSample,
 } from "@/lib/classification";
 import { closeSpeedFor } from "@/lib/close-speed";
 import { DealScanPills } from "@/components/DealScanPills";
@@ -95,7 +96,7 @@ export default function RankingPage() {
   }, []);
 
   const ranked = useMemo(() => {
-    let list = [...deals];
+    let list = deals.filter((deal) => !isHiddenSample(deal));
     if (bestOnly) {
       list = list.filter(
         (deal) =>

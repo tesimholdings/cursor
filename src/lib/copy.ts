@@ -51,11 +51,23 @@ export function isTemplateWhy(value?: string) {
 export function looksLikeOcrDump(text?: string | null) {
   if (!text) return false;
   const compact = text.replace(/\s+/g, " ").trim();
-  if (compact.length > 900) return true;
+  if (!compact) return false;
+  if (/(?:[A-Z]\s){3,}[A-Z]/.test(compact)) return true;
+  if (/confidentialinformation|confidentialuniquecoat|trailing3-year|sectioniexecutive/i.test(
+    compact.replace(/\s+/g, "")
+  )) return true;
+  if (/C O N F I D E N T I A L|T R A I L I N G|I N F O R M A T I O N/.test(compact)) {
+    return true;
+  }
+  if (compact.length > 420) return true;
   const words = compact.split(" ");
-  if (words.length < 80) return false;
-  const short = words.filter((word) => word.length <= 2).length;
-  return short / words.length > 0.35;
+  if (words.length >= 40) {
+    const short = words.filter((word) => word.length <= 2).length;
+    if (short / words.length > 0.3) return true;
+  }
+  const letters = compact.replace(/[^A-Za-z]/g, "");
+  const caps = compact.replace(/[^A-Z]/g, "");
+  return letters.length > 24 && caps.length / letters.length > 0.55;
 }
 
 export function readableDocumentText(chunks: Array<{ text?: string }>) {

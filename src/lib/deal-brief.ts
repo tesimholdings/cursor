@@ -1,5 +1,5 @@
 import { classifyDeal } from "./classification";
-import { firstSentences, stripLeadingName, unanswered } from "./copy";
+import { firstSentences, looksLikeOcrDump, stripLeadingName, unanswered } from "./copy";
 import { cimProse, hasReadableCim } from "./deal-picture";
 import { money } from "./format";
 import type { Deal, EvidenceKind } from "./types";
@@ -46,9 +46,11 @@ function companyEvidence(deal: Deal) {
         Date.parse(b.uploadedAt) - Date.parse(a.uploadedAt)
       );
     })[0];
-  const documentExcerpt = cleanExcerpt(
-    document?.textExcerpt || document?.extraction?.chunks[0]?.text
-  );
+  const rawExcerpt =
+    document?.textExcerpt || document?.extraction?.chunks[0]?.text;
+  const documentExcerpt = looksLikeOcrDump(rawExcerpt)
+    ? ""
+    : cleanExcerpt(rawExcerpt);
   const publicSource =
     deal.publicResearch?.status === "complete"
       ? deal.publicResearch.sources.find(

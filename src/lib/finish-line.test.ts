@@ -25,8 +25,10 @@ import {
   categorizeDeal,
   dealMatchesSearch,
   ensureDealClassification,
+  isHiddenSample,
   operatingStyleFor,
 } from "./classification";
+import { applyDealPatch } from "./deal-patch";
 import { companyHighlights } from "./deal-brief";
 import { buildOwnerQuestions } from "./owner-questions";
 import { buildStage1 } from "./screening";
@@ -710,11 +712,11 @@ describe("existing-deal seller material refresh", () => {
     deal.publicResearch = research;
     deal.ownerQuestions = buildOwnerQuestions(deal);
     expect(deal.ownerQuestions.questions[0].answer).toMatch(
-      /applies protective finishes/i
+      /apply(?:s)? protective finishes/i
     );
     deal.screening = buildStage1(deal);
     expect(deal.screening.questions[0].answer).toMatch(
-      /applies protective finishes/i
+      /apply(?:s)? protective finishes/i
     );
     expect(companyHighlights(deal).interesting.join(" ")).toContain(
       "applies protective finishes"
@@ -1167,7 +1169,7 @@ describe("CIM deal picture and tight copy", () => {
     const picture = buildDealPicture(deal);
     expect(picture.status).toBe("no_cim");
     expect(picture.summary).toMatch(/No CIM on card/);
-    expect(picture.facts.find((fact) => fact.label === "SDE")?.kind).toBe(
+    expect(picture.facts.find((fact) => fact.label === "Earnings")?.kind).toBe(
       "SELLER_CLAIM"
     );
     expect(dealFunnelStep(deal)).toBe(1);
@@ -1191,8 +1193,9 @@ describe("CIM deal picture and tight copy", () => {
         'C O N F I D E N T I A L I N F O R M A T I O N M E M O R A N D U M. The Company is a vertically integrated designer and manufacturer of advanced HVAF thermal spray equipment for industrial customers.',
     });
     const picture = buildDealPicture(deal);
-    expect(picture.summary).toMatch(/HVAF thermal spray/i);
-    expect(picture.summary).not.toMatch(/C O N F I D E N T I A L|CONFIDENTIAL/i);
+    expect(picture.summary).toMatch(/HVAF/i);
+    expect(picture.summary.split(/(?<=[.!?])\s+/).length).toBeLessThanOrEqual(3);
+    expect(picture.summary).not.toMatch(/C O N F I D E N T I A L|CONFIDENTIAL|T R A I L I N G/i);
   });
 
   it("skips CIM disclaimer pages and uses the operating description", () => {
@@ -1210,8 +1213,8 @@ describe("CIM deal picture and tight copy", () => {
         "No part of this Offering Memorandum or its contents is intended to provide tax, financial or legal advice. 40 Lake Bellevue Drive. Since company inception in 2001, the shop has worked as a general contractor performing design-build construction for county agencies.",
     });
     const picture = buildDealPicture(deal);
-    expect(picture.summary).toMatch(/general contractor/i);
-    expect(picture.summary).not.toMatch(/Offering Memorandum|Lake Bellevue/i);
+    expect(picture.summary).toMatch(/contract/i);
+    expect(picture.summary).not.toMatch(/Offering Memorandum|Lake Bellevue|CONFIDENTIAL/i);
   });
 
   it("rebuilds the card from a readable CIM and moves past teaser-only", () => {
@@ -1244,10 +1247,11 @@ describe("CIM deal picture and tight copy", () => {
     expect(deal.status).toBe("packet_review");
     expect(dealFunnelStep(deal)).toBe(2);
     expect(deal.dealPicture?.status).toBe("from_cim");
-    expect(deal.dealPicture?.summary).toMatch(/applies protective finishes/i);
+    expect(deal.dealPicture?.summary).toMatch(/HVAF|protective finishes/i);
     expect(deal.dealPicture?.summary).not.toMatch(/^Uniquecoat Technologies/i);
+    expect(deal.dealPicture?.summary).not.toMatch(/CONFIDENTIAL|T R A I L I N G/i);
     expect(deal.ownerQuestions?.questions[0].answer).toMatch(
-      /applies protective finishes/i
+      /HVAF|protective finishes/i
     );
     expect(deal.ownerQuestions?.questions[0].answer).not.toMatch(
       /^Uniquecoat Technologies/i
@@ -1258,13 +1262,13 @@ describe("CIM deal picture and tight copy", () => {
       )
     ).toBe(true);
     expect(deal.ownerQuestions?.questions[0].why).toBe(defaultWhy());
-    expect(deal.screening?.questions[0].answer).toMatch(/applies protective finishes/i);
-    const sde = deal.dealPicture?.facts.find((fact) => fact.label === "SDE");
-    expect(sde?.kind).toBe("SELLER_CLAIM");
-    expect(sde?.value).toMatch(/Seller Claim|recast/i);
+    expect(deal.screening?.questions[0].answer).toMatch(/HVAF|protective finishes/i);
+    const earnings = deal.dealPicture?.facts.find((fact) => fact.label === "Earnings");
+    expect(earnings?.kind).toBe("SELLER_CLAIM");
+    expect(earnings?.value).toMatch(/Seller Claim|recast/i);
     expect(
-      deal.dealPicture?.facts.find((fact) => fact.label === "Concentration")?.kind
-    ).toBe("UNANSWERED");
+      deal.dealPicture?.facts.find((fact) => fact.label === "Concentration")
+    ).toBeUndefined();
     expect(deal.closeSpeed || closeSpeedFor(deal)).toMatch(/Fast|Mid|Slow/);
   });
 
@@ -1305,10 +1309,8 @@ describe("CIM deal picture and tight copy", () => {
     expect(picture.facts.find((fact) => fact.label === "Revenue")?.value).not.toMatch(
       /\$60\b/
     );
-    expect(picture.facts.find((fact) => fact.label === "Concentration")?.kind).toBe(
-      "UNANSWERED"
-    );
-    expect(picture.facts.find((fact) => fact.label === "SDE")?.kind).toBe(
+    expect(picture.facts.find((fact) => fact.label === "Concentration")).toBeUndefined();
+    expect(picture.facts.find((fact) => fact.label === "Earnings")?.kind).toBe(
       "SELLER_CLAIM"
     );
   });
@@ -1332,6 +1334,96 @@ describe("CIM deal picture and tight copy", () => {
     expect(picture.facts.find((fact) => fact.label === "Concentration")?.value).toBe(
       "22%"
     );
+  });
+
+  it("does not paste CIM OCR and does not put SDE in the Revenue field", () => {
+    const deal = baseDeal();
+    deal.name = "Uniquecoat Technologies, LLC";
+    deal.askingPrice = 4_950_000;
+    deal.location = "Oilville, VA";
+    deal.documents.push({
+      id: "uct_ocr",
+      dealId: deal.id,
+      name: "UCT_CIM_6326.pdf",
+      category: "cim",
+      stage: 2,
+      uploadedAt: new Date().toISOString(),
+      size: 20,
+      textExcerpt:
+        "C O N F I D E N T I A L I N F O R M A T I O N M E M O R A N D U M $2,246,787 TRAILING 3-YEAR AVG REVENUE $1,296,396 TRAILING 3-YEAR AVG SDE 73.6% TRAILING 3-YEAR AVG GROSS MARGIN 27 YEARS IN OPERATION 6FULL-TIME EMPLOYEES 45+ COUNTRIES SERVED Oilville, Virginia HVAF thermal spray equipment and precision powder feeders. Founded in 1999 by the inventor of modern HVAF combustion technology.",
+    });
+    const picture = buildDealPicture(deal);
+    expect(picture.summary).toMatch(/HVAF/i);
+    expect(picture.summary.split(/(?<=[.!?])\s+/).length).toBeLessThanOrEqual(3);
+    expect(picture.summary).not.toMatch(
+      /CONFIDENTIAL|T R A I L I N G|TRAILING 3-YEAR|C O N F I D E N T I A L/i
+    );
+    expect(picture.facts.find((fact) => fact.label === "Revenue")?.value).toMatch(
+      /2\.25M|2,246,787/
+    );
+    expect(picture.facts.find((fact) => fact.label === "Revenue")?.value).not.toMatch(
+      /1\.30M|1,296,396/
+    );
+    expect(picture.facts.find((fact) => fact.label === "Earnings")?.kind).toBe(
+      "SELLER_CLAIM"
+    );
+    expect(picture.facts.find((fact) => fact.label === "Earnings")?.value).toMatch(
+      /1\.30M|1,296,396/
+    );
+    expect(picture.facts.find((fact) => fact.label === "Ask")?.value).toMatch(
+      /4\.95M|4,950,000/
+    );
+    expect(picture.ugly).toMatch(/founder-inventor|key-person/i);
+    expect(picture.facts.every((fact) => fact.kind !== "UNANSWERED")).toBe(true);
+  });
+});
+
+describe("deal PATCH persist and seed hide", () => {
+  it("persists dealPicture, notes, ownerQuestions, screening, and publicResearch", () => {
+    const deal = baseDeal();
+    applyDealPatch(deal, {
+      notes: "Keep this note.",
+      dealPicture: {
+        version: 6,
+        status: "from_cim",
+        summary: "They sell HVAF spray systems and powder feeders.",
+        facts: [],
+        risks: [],
+        unanswered: [],
+        rebuiltAt: new Date().toISOString(),
+        scoreLabel: "Board score",
+        score: 60,
+        closeSpeed: "Mid",
+      },
+      ownerQuestions: deal.ownerQuestions,
+      screening: deal.screening,
+      publicResearch: {
+        status: "complete",
+        provider: "none",
+        searchedAt: new Date().toISOString(),
+        sources: [],
+      },
+    });
+    expect(deal.notes).toBe("Keep this note.");
+    expect(deal.dealPicture?.summary).toMatch(/HVAF/);
+    expect(deal.publicResearch?.status).toBe("complete");
+  });
+
+  it("hides batch_seed sample cards and keeps live Mighty", () => {
+    expect(
+      isHiddenSample({
+        id: "deal_mighty",
+        batchId: "batch_seed",
+        source: "Seed list",
+      })
+    ).toBe(true);
+    expect(
+      isHiddenSample({
+        id: "deal_itxxd16w6abh",
+        batchId: "batch_live",
+        source: "Broker",
+      })
+    ).toBe(false);
   });
 });
 

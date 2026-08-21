@@ -175,6 +175,15 @@ export function recordTagFor(deal: Deal): RecordTag {
     : "Live";
 }
 
+/** Seed / demo rows stay in the store but never appear on the live board. */
+export function isHiddenSample(deal: Pick<Deal, "batchId" | "source" | "id">) {
+  return (
+    deal.batchId === "batch_seed" ||
+    deal.source === "Seed list" ||
+    deal.id === "deal_mighty"
+  );
+}
+
 export function boxFitFor(deal: Deal): BoxFit {
   const ask = deal.askingPrice;
   if (ask == null || !Number.isFinite(ask) || ask <= 0) return "Unknown";

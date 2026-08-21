@@ -89,6 +89,7 @@ export interface DealPicture {
   version: number;
   status: DealPictureStatus;
   summary: string;
+  ugly?: string;
   facts: DealPictureFact[];
   risks: string[];
   unanswered: string[];

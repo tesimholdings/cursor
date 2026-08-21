@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
+import { applyDealPatch } from "@/lib/deal-patch";
 import { readStore, updateStore } from "@/lib/store";
 import { storeFailureResponse } from "@/lib/store-response";
-import type { PipelineStatus } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -26,11 +26,7 @@ export async function PATCH(
     const deal = await updateStore((store) => {
       const d = store.deals.find((x) => x.id === id);
       if (!d) return null;
-      if (body.status) d.status = body.status as PipelineStatus;
-      if (body.teamId) d.teamId = body.teamId;
-      if (body.fatalRisks) d.fatalRisks = body.fatalRisks;
-      if (body.financing) d.financing = body.financing;
-      d.updatedAt = new Date().toISOString();
+      applyDealPatch(d, body);
       return d;
     });
     if (!deal) return NextResponse.json({ error: "Not found" }, { status: 404 });
