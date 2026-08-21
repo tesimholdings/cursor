@@ -5,6 +5,7 @@ import type {
   FinancialLine,
   FinalDecision,
 } from "./types";
+import { icHeadlineScore } from "./board-scoring";
 import { money, multiple, parseMoney, pct } from "./format";
 import {
   analyzeCustomerConcentration,
@@ -178,15 +179,7 @@ export function runDiligence(deal: Deal): DiligencePack {
     legal: clamp((hasLegal ? 2 : 0) + (hasEnvironmental ? 2 : 0), 0, 5),
     total: 0,
   };
-  scores.total =
-    scores.financial +
-    scores.customer +
-    scores.operations +
-    scores.growth +
-    scores.assets +
-    scores.dealStructure +
-    scores.tax +
-    scores.legal;
+  scores.total = icHeadlineScore(scores);
 
   const fatalRisks = [...deal.fatalRisks];
   if (packetConflict) {
@@ -503,7 +496,7 @@ function recommendationReasons(
     fatalRisks.length
       ? `Fatal-risk override: ${fatalRisks.join(" ")}`
       : "No fatal risk has been proven from currently extracted evidence.",
-    `Financial evidence score is ${scores.financial}/20; seller-recast earnings are not verified.`,
+    `Financial evidence score is ${scores.financial}/20 (purchase-value weight 25); seller-recast earnings are not verified.`,
     top1 == null
       ? "Customer concentration is unanswered."
       : `Top customer is ${pct(top1)} based on an extracted customer table.`,

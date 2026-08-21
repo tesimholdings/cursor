@@ -1,4 +1,5 @@
 import { classifyDeal } from "@/lib/classification";
+import { closeSpeedResult } from "@/lib/close-speed";
 import type { Deal } from "@/lib/types";
 
 export function DealScanPills({
@@ -24,6 +25,7 @@ export function DealScanPills({
   const box = deal.boxFit || computed!.boxFit;
   const earnings = deal.earningsQuality || computed!.earningsQuality;
   const record = deal.recordTag || computed!.recordTag;
+  const close = closeSpeedResult(deal);
 
   return (
     <div className={`flex flex-wrap gap-1.5 text-[11px] font-semibold ${className}`}>
@@ -88,13 +90,32 @@ export function DealScanPills({
       {record === "Seed / Demo" && (
         <Pill text={record} style="bg-purple-100 text-purple-900" />
       )}
+      <Pill
+        text={`${close.speed} close`}
+        title={close.reasons.join(" ")}
+        style={
+          close.speed === "Fast"
+            ? "bg-teal-100 text-teal-950"
+            : close.speed === "Slow"
+              ? "bg-rose-100 text-rose-950"
+              : "bg-slate-100 text-slate-800"
+        }
+      />
     </div>
   );
 }
 
-function Pill({ text, style }: { text: string; style: string }) {
+function Pill({
+  text,
+  style,
+  title,
+}: {
+  text: string;
+  style: string;
+  title?: string;
+}) {
   return (
-    <span className={`rounded-full px-2 py-0.5 leading-5 ${style}`}>
+    <span className={`rounded-full px-2 py-0.5 leading-5 ${style}`} title={title}>
       {text}
     </span>
   );

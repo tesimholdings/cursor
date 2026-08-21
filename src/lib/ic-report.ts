@@ -1,4 +1,5 @@
 import type { Deal } from "./types";
+import { icHeadlineScore } from "./board-scoring";
 import { money, pct } from "./format";
 
 export function investmentCommitteeHtml(deal: Deal) {
@@ -10,7 +11,7 @@ export function investmentCommitteeHtml(deal: Deal) {
   const t = deal.tax;
   const rec = d?.finalDecision || "CONTINUE DILIGENCE";
   const sections: [string, string][] = [
-    ["1. Executive Summary", `${deal.name} is a ${deal.industry} business in ${deal.location}. Asking ${money(deal.askingPrice)}. Owner score ${o?.score ?? "—"}. Step 1B Pre-NDA score ${s?.preNdaScore ?? "—"}. Packet score ${p?.score ?? "—"}. IC score ${d?.scores.total ?? "—"}/100. Recommendation: ${rec}. Why: ${d?.recommendationWhy.join(" ") || "Full IC evidence is not available."}`],
+    ["1. Executive Summary", `${deal.name} is a ${deal.industry} business in ${deal.location}. Asking ${money(deal.askingPrice)}. Owner score ${o?.score ?? "—"}. Step 1B Pre-NDA score ${s?.preNdaScore ?? "—"}. Packet score ${p?.score ?? "—"}. IC score ${d ? icHeadlineScore(d.scores) : "—"}/100. Recommendation: ${rec}. Why: ${d?.recommendationWhy.join(" ") || "Full IC evidence is not available."}`],
     ["2. What the Business Does", o?.questions.find((q) => q.id === 1)?.answer || s?.questions.find((q) => q.id === 1)?.answer || "NOT PROVIDED"],
     ["3. Industry Need", o?.questions.find((q) => q.id === 2)?.answer || s?.questions.find((q) => q.id === 2)?.answer || "NOT PROVIDED"],
     ["4. Market Size & Growth", o?.questions.find((q) => q.id === 3)?.answer || s?.questions.find((q) => q.id === 3)?.answer || "NOT PROVIDED"],

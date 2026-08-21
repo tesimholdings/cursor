@@ -13,12 +13,15 @@ import {
 } from "@/lib/pipeline";
 import {
   BUSINESS_CATEGORIES,
+  CLOSE_SPEEDS,
   OPERATING_STYLES,
   classifyDeal,
   dealMatchesSearch,
 } from "@/lib/classification";
+import { closeSpeedFor } from "@/lib/close-speed";
 import { DealScanPills } from "@/components/DealScanPills";
 import { BoardScoreStrip } from "@/components/BoardScores";
+import { ScoreLegend } from "@/components/ScoreLegend";
 import {
   BOARD_SCORE_METRICS,
   boardScoreValue,
@@ -48,6 +51,7 @@ export default function RankingPage() {
     industry: "",
     state: "",
     step: "all",
+    closeSpeed: "all",
   });
 
   useEffect(() => {
@@ -129,6 +133,12 @@ export default function RankingPage() {
         (deal) => dealFunnelStep(deal) === Number(filters.step)
       );
     }
+    if (filters.closeSpeed !== "all") {
+      list = list.filter(
+        (deal) =>
+          (deal.closeSpeed || closeSpeedFor(deal)) === filters.closeSpeed
+      );
+    }
     if (query.trim()) {
       list = list.filter((deal) => dealMatchesSearch(deal, query));
     }
@@ -148,9 +158,10 @@ export default function RankingPage() {
           <div className="kicker">Stefan’s broker screen</div>
           <h1 className="serif text-4xl">Which listings deserve an NDA?</h1>
           <p className="mt-2 text-[var(--muted)]">
-            Sort by the same headline already on the card — IC score when a
-            Full IC exists, otherwise Board average — then scan Good / Bad /
-            Interesting before spending time with the broker.
+            Sort by the same headline already on the card — weighted IC score
+            when a Full IC exists, otherwise the purchase-value Board score —
+            then scan Good / Bad / Interesting before spending time with the
+            broker. Fast / Mid / Slow is close speed, not a quality rank.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
@@ -227,7 +238,7 @@ export default function RankingPage() {
             id="deal-search"
             type="search"
             autoComplete="off"
-            placeholder="Company, industry, category, location, broker, source, or hands-off…"
+            placeholder="Company, industry, category, location, broker, source, hands-off, or slow close…"
             className="w-full rounded-xl border border-[var(--line)] bg-white px-4 py-3 text-base outline-none focus:border-[var(--navy)] focus:ring-2 focus:ring-blue-100"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
@@ -250,8 +261,10 @@ export default function RankingPage() {
         </div>
         <p className="mt-2 text-xs text-[var(--muted)]">
           Searches names, industries, categories, locations, brokers, sources,
-          and operating-style tags as you type.
+          operating-style tags, and Fast / Mid / Slow close-speed tags as you
+          type.
         </p>
+        <ScoreLegend className="mt-3" />
       </div>
 
       <div className="card flex flex-wrap gap-3 rounded-2xl p-4 text-sm">
@@ -311,6 +324,20 @@ export default function RankingPage() {
           {BUSINESS_CATEGORIES.map((category) => (
             <option key={category} value={category}>
               {category}
+            </option>
+          ))}
+        </select>
+        <select
+          className="rounded-lg border border-[var(--line)] bg-white px-2 py-1"
+          value={filters.closeSpeed}
+          onChange={(event) =>
+            setFilters({ ...filters, closeSpeed: event.target.value })
+          }
+        >
+          <option value="all">All close speeds</option>
+          {CLOSE_SPEEDS.map((speed) => (
+            <option key={speed} value={speed}>
+              {speed} close
             </option>
           ))}
         </select>

@@ -16,7 +16,12 @@ import { OwnerQuestionsPanel } from "@/components/OwnerQuestionsPanel";
 import { DealScanPills } from "@/components/DealScanPills";
 import { BoardScorePanel } from "@/components/BoardScores";
 import { AskAboutDeal } from "@/components/AskAboutDeal";
-import { headlineScore } from "@/lib/board-scoring";
+import {
+  headlineScore,
+  icHeadlineScore,
+  icPillarContribution,
+  IC_PURCHASE_VALUE_PILLARS,
+} from "@/lib/board-scoring";
 
 export function DealClient({ id }: { id: string }) {
   const [deal, setDeal] = useState<Deal | null>(null);
@@ -552,23 +557,20 @@ export function DealClient({ id }: { id: string }) {
         {d && (
           <div className="mt-6 space-y-4">
             <p className="serif text-2xl">
-              Final score {d.scores.total} / 100 — {d.finalDecision.replace(/_/g, " ")}
+              Final score {icHeadlineScore(d.scores)} / 100 —{" "}
+              {d.finalDecision.replace(/_/g, " ")}
             </p>
             <div className="grid grid-cols-2 gap-2 text-sm md:grid-cols-4">
-              {([
-                ["Financial quality", d.scores.financial, 20],
-                ["Customer quality", d.scores.customer, 15],
-                ["Operations", d.scores.operations, 15],
-                ["Growth", d.scores.growth, 15],
-                ["Assets / downside", d.scores.assets, 10],
-                ["Deal structure", d.scores.dealStructure, 10],
-                ["Tax efficiency", d.scores.tax, 10],
-                ["Legal / environmental", d.scores.legal, 5],
-              ] as const).map(([l, v, m]) => (
-                <div key={l} className="rounded-xl bg-[var(--paper)] p-3">
-                  <div className="text-xs text-[var(--muted)]">{l}</div>
+              {IC_PURCHASE_VALUE_PILLARS.map((pillar) => (
+                <div key={pillar.key} className="rounded-xl bg-[var(--paper)] p-3">
+                  <div className="text-xs text-[var(--muted)]">{pillar.label}</div>
                   <div className="font-semibold">
-                    {v} / {m}
+                    {icPillarContribution(
+                      d.scores[pillar.key],
+                      pillar.max,
+                      pillar.weight
+                    )}{" "}
+                    / {pillar.weight}
                   </div>
                 </div>
               ))}

@@ -19,14 +19,19 @@ business category, operating style, risk snapshot, asset profile, TESIM box fit,
 and earnings quality. Missing evidence produces `Unknown` or `Unverified`, never
 an optimistic guess. Seed records are marked `Seed / Demo`.
 
-The headline listing-level **Board score** is the rounded, equal-weight average
-of Financials, Owner, Growth, Hands-off, Safety, and Assets. The broker board
-sorts Best first (default) or Worst first by that same headline — IC score when
-a Full IC exists, otherwise Board average. Unscored deals sit last when Best
-first and first when Worst first. A minimum filter can still use the Average or
-any sub-score. Owner Questions and listing math remain inputs/evidence, not
-rival headline scores. If a Full IC is run, the locked weighted IC score
-becomes the headline while the Board average stays visible separately.
+The headline listing-level **Board score** is a purchase-value weighted mix of
+the same six 0–100 subs: Financials 30, Assets 20, Owner 15, Safety 15,
+Hands-off 10, Growth 10. Missing subs are dropped and the rest renormalized.
+Equal-weight is shown only as a small legacy check and is not the sort key.
+The broker board sorts Best first (default) or Worst first by that same
+headline — weighted IC score when a Full IC exists, otherwise the weighted
+Board score. Unscored deals sit last when Best first and first when Worst
+first. A minimum filter can still use Purchase value or any sub-score. Owner
+Questions and listing math remain inputs/evidence, not rival headline scores.
+
+Every card also carries a **Fast / Mid / Slow** close-speed tag (time-to-close
+after a serious LOI, not a quality score). Search and filters see the tag;
+Best/Worst sort does not use it.
 
 Facts are labeled **Verified**, **Seller provided**, **Estimate**, **AI calculation**, **Assumption**, **Not provided**, **Conflict**, or **External research**. The app will not invent capacity or pick a number when listing and packet disagree.
 
@@ -45,11 +50,11 @@ evidence retains page numbers; workbook evidence retains sheet names and cell
 ranges. Scanned PDFs fail explicitly because OCR is not configured.
 
 The final IC call is exactly one of **STRONG BUY**, **BUY SUBJECT TO
-CONDITIONS**, **CONTINUE DILIGENCE**, **RENEGOTIATE**, or **PASS**. The scoring
-weights are Financial 20, Customer 15, Operations 15, Growth 15,
-Asset/downside 10, Deal structure 10, Tax 10, and Legal/environmental 5.
-Fatal risks override the total. Seller-recast SDE/EBITDA is never treated as
-verified, and tax benefits cannot rescue weak economics.
+CONDITIONS**, **CONTINUE DILIGENCE**, **RENEGOTIATE**, or **PASS**. The
+purchase-value IC weights are Financial 25, Customer / revenue 20, Operations
+15, Asset / downside 12, Deal structure 10, Growth 8, Tax 5, and Legal / reg /
+env 5. Fatal risks override the total. Seller-recast SDE/EBITDA is never
+treated as verified, and tax benefits cannot rescue weak economics.
 
 ## Publish a shareable preview
 

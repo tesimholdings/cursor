@@ -1,3 +1,4 @@
+import { closeSpeedFor } from "./close-speed";
 import type {
   AssetProfile,
   BoxFit,
@@ -57,6 +58,8 @@ export const EARNINGS_QUALITIES: EarningsQuality[] = [
   "Recast",
   "Unverified",
 ];
+
+export { CLOSE_SPEEDS } from "./close-speed";
 
 function dealText(deal: Pick<Deal, "name" | "industry" | "notes">) {
   return `${deal.name} ${deal.industry} ${deal.notes || ""}`.toLowerCase();
@@ -385,7 +388,10 @@ export function ensureDealClassification(deal: Deal): boolean {
     deal.earningsQuality = classification.earningsQuality;
     deal.recordTag = classification.recordTag;
   }
-  return changed;
+  const closeSpeed = closeSpeedFor(deal);
+  const speedChanged = deal.closeSpeed !== closeSpeed;
+  if (speedChanged) deal.closeSpeed = closeSpeed;
+  return changed || speedChanged;
 }
 
 export function ensureStoreClassifications(deals: Deal[]): boolean {
@@ -414,6 +420,7 @@ export function dealMatchesSearch(deal: Deal, query: string) {
     earningsQuality: deal.earningsQuality || computed.earningsQuality,
     recordTag: deal.recordTag || computed.recordTag,
   };
+  const closeSpeed = deal.closeSpeed || closeSpeedFor(deal);
   const haystack = normalizeDealSearch(
     [
       deal.name,
@@ -429,6 +436,9 @@ export function dealMatchesSearch(deal: Deal, query: string) {
       classification.boxFit,
       classification.earningsQuality,
       classification.recordTag,
+      closeSpeed,
+      `${closeSpeed} close`,
+      "close speed",
     ]
       .filter(Boolean)
       .join(" ")

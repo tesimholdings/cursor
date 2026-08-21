@@ -34,10 +34,15 @@ import {
   boardScoreValue,
   buildBoardScores,
   ensureDealBoardScores,
+  equalWeightAverage,
   headlineRankValue,
   headlineScore,
+  icHeadlineScore,
+  purchaseValueAverage,
   sortDealsByHeadline,
+  weightedScore,
 } from "./board-scoring";
+import { closeSpeedFor, closeSpeedResult } from "./close-speed";
 import type {
   Deal,
   DocumentRecord,
@@ -508,6 +513,7 @@ describe("TESIM business categories and company-specific brief", () => {
     expect(deal.boxFit).toBe("In-box");
     expect(deal.earningsQuality).toBe("Unverified");
     expect(deal.recordTag).toBe("Live");
+    expect(deal.closeSpeed).toBe("Slow");
     expect(deal.id).toBe("finish");
     expect(ensureDealClassification(deal)).toBe(false);
   });
@@ -532,6 +538,7 @@ describe("TESIM business categories and company-specific brief", () => {
     expect(dealMatchesSearch(deal, "austin thorpe")).toBe(true);
     expect(dealMatchesSearch(deal, "mixed")).toBe(true);
     expect(dealMatchesSearch(deal, "recast")).toBe(false);
+    expect(dealMatchesSearch(deal, "fast close")).toBe(true);
     expect(dealMatchesSearch(deal, "")).toBe(true);
     expect(dealMatchesSearch(deal, "gas")).toBe(false);
 
@@ -542,6 +549,8 @@ describe("TESIM business categories and company-specific brief", () => {
     expect(dealMatchesSearch(gas, "gas")).toBe(true);
     expect(dealMatchesSearch(gas, "hands-off")).toBe(true);
     expect(dealMatchesSearch(gas, "safer")).toBe(true);
+    expect(dealMatchesSearch(gas, "slow")).toBe(true);
+    expect(dealMatchesSearch(gas, "fast close")).toBe(false);
   });
 
   it("keeps the known live examples distinct and evidence-bounded", () => {
@@ -561,6 +570,7 @@ describe("TESIM business categories and company-specific brief", () => {
       assetProfile: "Asset-heavy",
       boxFit: "In-box",
       earningsQuality: "Recast",
+      closeSpeed: "Mid",
     });
 
     const painting = baseDeal();
@@ -576,6 +586,7 @@ describe("TESIM business categories and company-specific brief", () => {
       assetProfile: "Asset-light",
       boxFit: "Too big",
       earningsQuality: "Recast",
+      closeSpeed: "Mid",
     });
     expect(dealMatchesSearch(painting, "riskier")).toBe(true);
     expect(dealMatchesSearch(painting, "recast")).toBe(true);
@@ -594,6 +605,7 @@ describe("TESIM business categories and company-specific brief", () => {
       assetProfile: "Unknown",
       boxFit: "Too big",
       earningsQuality: "Unverified",
+      closeSpeed: "Slow",
     });
 
     const mighty = baseDeal();
@@ -606,6 +618,7 @@ describe("TESIM business categories and company-specific brief", () => {
     ensureDealClassification(mighty);
     expect(mighty.riskSnapshot).toBe("Riskier");
     expect(mighty.earningsQuality).toBe("Recast");
+    expect(mighty.closeSpeed).toBe("Mid");
 
     const unknown = baseDeal();
     unknown.name = "Unclassified Opportunity";
@@ -637,7 +650,9 @@ describe("TESIM business categories and company-specific brief", () => {
     ensureDealClassification(seed);
     expect(seed.recordTag).toBe("Seed / Demo");
     expect(seed.riskSnapshot).toBe("Unknown");
+    expect(seed.closeSpeed).toBe("Slow");
     expect(dealMatchesSearch(seed, "seed / demo")).toBe(true);
+    expect(dealMatchesSearch(seed, "slow close")).toBe(true);
   });
 });
 
@@ -698,24 +713,98 @@ describe("existing-deal seller material refresh", () => {
 });
 
 describe("single Board average and six sub-scores", () => {
-  it("uses the equal-weight rounded average", () => {
+  it("uses the purchase-value weighted headline, not equal weight", () => {
     const deal = baseDeal();
     ensureDealClassification(deal);
     const scores = buildBoardScores(deal);
-    const subs = [
-      scores.financials.score,
-      scores.owner.score,
-      scores.growth.score,
-      scores.handsOff.score,
-      scores.safety.score,
-      scores.assets.score,
-    ];
-    expect(scores.average).toBe(
-      Math.round(subs.reduce((sum, score) => sum + score, 0) / subs.length)
+    expect(scores.average).toBe(purchaseValueAverage(scores));
+    expect(equalWeightAverage(scores)).toBe(
+      Math.round(
+        (scores.financials.score +
+          scores.owner.score +
+          scores.growth.score +
+          scores.handsOff.score +
+          scores.safety.score +
+          scores.assets.score) /
+          6
+      )
     );
     expect(ensureDealBoardScores(deal)).toBe(true);
     expect(ensureDealBoardScores(deal)).toBe(false);
     expect(boardScoreValue(deal, "average")).toBe(scores.average);
+  });
+
+  it("renormalizes when a board sub is missing and never invents one", () => {
+    expect(
+      weightedScore([
+        { score: 80, weight: 30 },
+        { score: 20, weight: 20 },
+        { score: 40, weight: 15 },
+        { score: 40, weight: 15 },
+        { score: 10, weight: 10 },
+        { score: 10, weight: 10 },
+      ])
+    ).toBe(42);
+    expect(
+      weightedScore([
+        { score: 80, weight: 30 },
+        { score: null, weight: 20 },
+        { score: 40, weight: 15 },
+        { score: 40, weight: 15 },
+        { score: 10, weight: 10 },
+        { score: 10, weight: 10 },
+      ])
+    ).toBe(Math.round((80 * 30 + 40 * 15 + 40 * 15 + 10 * 10 + 10 * 10) / 80));
+  });
+
+  it("reweights IC pillars and keeps fatal-risk PASS", async () => {
+    expect(
+      icHeadlineScore({
+        financial: 20,
+        customer: 15,
+        operations: 15,
+        growth: 15,
+        assets: 10,
+        dealStructure: 10,
+        tax: 10,
+        legal: 5,
+        total: 100,
+      })
+    ).toBe(100);
+    expect(
+      icHeadlineScore({
+        financial: 10,
+        customer: 0,
+        operations: 15,
+        growth: 0,
+        assets: 10,
+        dealStructure: 10,
+        tax: 0,
+        legal: 0,
+        total: 45,
+      })
+    ).toBe(
+      Math.round(
+        0.25 * 50 +
+          0.2 * 0 +
+          0.15 * 100 +
+          0.12 * 100 +
+          0.1 * 100 +
+          0.08 * 0 +
+          0.05 * 0 +
+          0.05 * 0
+      )
+    );
+
+    const deal = baseDeal();
+    deal.askingPrice = 4_500_000;
+    deal.sde = 1_000_000;
+    deal.revenue = 4_000_000;
+    deal.documents.push(await customerDocument(deal.id));
+    const result = runDiligence(deal);
+    expect(result.finalDecision).toBe("PASS");
+    expect(result.fatalRisks.join(" ")).toMatch(/73.*no extracted customer contract/i);
+    expect(result.scores.total).toBe(icHeadlineScore(result.scores));
   });
 
   it("ranks Hands-off and Safety in opposite directions for gas and painting", () => {
@@ -820,24 +909,150 @@ describe("broker board headline sort", () => {
   it("ranks a Step-2 IC headline ahead of Board average when they disagree", () => {
     const highBoardLowIc = scoredDeal("High board / low IC", 90);
     highBoardLowIc.diligence = runDiligence(highBoardLowIc);
-    highBoardLowIc.diligence.scores.total = 40;
+    highBoardLowIc.diligence.scores = icScoresAtPercent(40);
 
     const lowBoardHighIc = scoredDeal("Low board / high IC", 40);
     lowBoardHighIc.diligence = runDiligence(lowBoardHighIc);
-    lowBoardHighIc.diligence.scores.total = 90;
+    lowBoardHighIc.diligence.scores = icScoresAtPercent(90);
 
     expect(headlineScore(highBoardLowIc)).toMatchObject({
       label: "IC score",
-      score: 40,
+      score: icHeadlineScore(highBoardLowIc.diligence.scores),
       boardAverage: 90,
     });
-    expect(headlineRankValue(lowBoardHighIc)).toBe(90);
+    expect(headlineRankValue(lowBoardHighIc)).toBe(
+      icHeadlineScore(lowBoardHighIc.diligence.scores)
+    );
 
     expect(
       sortDealsByHeadline([highBoardLowIc, lowBoardHighIc], "best").map(
         (deal) => deal.name
       )
     ).toEqual(["Low board / high IC", "High board / low IC"]);
+  });
+
+  it("does not let a Hands-off gas PASS outrank a real IC just because Hands-off was equal-weight", () => {
+    const gas = baseDeal();
+    gas.name = "East Texas portfolio";
+    gas.industry = "Gas stations / C-stores";
+    gas.askingPrice = 20_000_000;
+    gas.ffe = null;
+    gas.realEstateIncluded = null;
+    gas.notes = undefined;
+    gas.diligence = undefined;
+    ensureDealClassification(gas);
+    ensureDealBoardScores(gas);
+
+    const icDeal = scoredDeal("Mighty Molding and Manufacturing", 40);
+    icDeal.diligence = runDiligence(icDeal);
+    icDeal.diligence.scores = icScoresAtPercent(58);
+
+    const gasEqual = equalWeightAverage(gas.boardScores!);
+    const gasWeighted = purchaseValueAverage(gas.boardScores!);
+    expect(gasScoresHandsOffBoost(gasEqual, gasWeighted)).toBe(true);
+    expect(headlineScore(gas).label).toBe("Board score");
+    expect(headlineScore(icDeal).label).toBe("IC score");
+    expect(headlineRankValue(icDeal)).toBeGreaterThan(headlineRankValue(gas)!);
+    expect(
+      sortDealsByHeadline([gas, icDeal], "best").map((deal) => deal.name)
+    ).toEqual(["Mighty Molding and Manufacturing", "East Texas portfolio"]);
+  });
+});
+
+describe("close-speed tags", () => {
+  it("tags seeds Slow and never Fast", () => {
+    const seed = baseDeal();
+    seed.batchId = "batch_seed";
+    seed.source = "Seed list";
+    seed.name = "Mighty Molding";
+    seed.industry = "Custom injection molding";
+    seed.realEstateIncluded = false;
+    ensureDealClassification(seed);
+    expect(closeSpeedFor(seed)).toBe("Slow");
+    expect(closeSpeedResult(seed).reasons.join(" ")).toMatch(/Seed/);
+  });
+
+  it("tags gas, gov/WBE, franchise, tooling, and person-certs Slow from existing facts", () => {
+    const gas = classifiedDeal({
+      name: "East Texas portfolio",
+      industry: "Gas stations / C-stores",
+      askingPrice: 35_000_000,
+      realEstateIncluded: true,
+    });
+    expect(closeSpeedFor(gas)).toBe("Slow");
+
+    const gov = classifiedDeal({
+      name: "Harbor Machine LLC",
+      industry: "Precision CNC machining",
+      notes: "WBE set-aside government contractor; novation required.",
+      realEstateIncluded: false,
+    });
+    expect(closeSpeedFor(gov)).toBe("Slow");
+
+    const franchise = classifiedDeal({
+      name: "Quick Lube Express LLC",
+      industry: "Oil change / lube",
+      notes: "Franchise agreement; franchise transfer required.",
+      realEstateIncluded: false,
+    });
+    expect(closeSpeedFor(franchise)).toBe("Slow");
+
+    const molds = classifiedDeal({
+      name: "Precision Plastics LLC",
+      industry: "Plastic injection molding",
+      notes: "Customer-owned molds stay with the largest account.",
+      realEstateIncluded: false,
+    });
+    expect(closeSpeedFor(molds)).toBe("Slow");
+
+    const personCert = classifiedDeal({
+      name: "Gulf Coast Builders LLC",
+      industry: "Commercial construction",
+      notes: "Personal CGC sits on the founder.",
+      realEstateIncluded: false,
+    });
+    expect(closeSpeedFor(personCert)).toBe("Slow");
+  });
+
+  it("tags Fast only for a named clean operator and Mid for a normal recast CIM path", () => {
+    const fast = classifiedDeal({
+      name: "Heartland Precision CNC LLC",
+      industry: "Precision CNC machining",
+      askingPrice: 5_400_000,
+      realEstateIncluded: false,
+      notes: "Job shop. Tax-tied earnings reconcile to supplied tax returns.",
+    });
+    expect(fast.earningsQuality).toBe("Tax-tied");
+    expect(closeSpeedFor(fast)).toBe("Fast");
+
+    const mid = classifiedDeal({
+      name: "Uniquecoat Technologies, LLC",
+      industry: "Industrial technology / thermal spray systems",
+      askingPrice: 4_950_000,
+      realEstateIncluded: true,
+      notes:
+        "Adjusted SDE is seller-provided. Real estate is owned separately and available for acquisition.",
+    });
+    expect(mid.earningsQuality).toBe("Recast");
+    expect(closeSpeedFor(mid)).toBe("Mid");
+
+    const unnamedBroker = classifiedDeal({
+      name: "Confidential seller",
+      industry: "Distribution / wholesale",
+      broker: "Midwest Business Brokers",
+      listingUrl: "https://example.com/listing",
+      askingPrice: 6_000_000,
+      realEstateIncluded: false,
+    });
+    expect(closeSpeedFor(unnamedBroker)).toBe("Mid");
+
+    const unnamedNoPath = classifiedDeal({
+      name: "Unclassified Opportunity",
+      industry: "Unknown",
+      askingPrice: null,
+      realEstateIncluded: null,
+    });
+    expect(closeSpeedFor(unnamedNoPath)).toBe("Slow");
   });
 });
 
@@ -970,4 +1185,32 @@ function scoredDeal(name: string, average: number): Deal {
   deal.name = name;
   deal.boardScores = { ...buildBoardScores(deal), average };
   return deal;
+}
+
+function icScoresAtPercent(percent: number) {
+  const p = percent / 100;
+  const scores = {
+    financial: Math.round(20 * p),
+    customer: Math.round(15 * p),
+    operations: Math.round(15 * p),
+    growth: Math.round(15 * p),
+    assets: Math.round(10 * p),
+    dealStructure: Math.round(10 * p),
+    tax: Math.round(10 * p),
+    legal: Math.round(5 * p),
+    total: 0,
+  };
+  scores.total = icHeadlineScore(scores);
+  return scores;
+}
+
+function classifiedDeal(partial: Partial<Deal> & Pick<Deal, "name" | "industry">) {
+  const deal = baseDeal();
+  Object.assign(deal, partial);
+  ensureDealClassification(deal);
+  return deal;
+}
+
+function gasScoresHandsOffBoost(equalWeight: number, weighted: number) {
+  return equalWeight > weighted;
 }

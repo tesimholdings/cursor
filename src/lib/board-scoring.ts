@@ -3,7 +3,105 @@ import type {
   BoardScores,
   BoardSubScore,
   Deal,
+  DiligencePack,
 } from "./types";
+
+/** Purchase-value weights for the six listing subs. Missing subs are dropped and the rest renormalized. */
+export const BOARD_PURCHASE_VALUE_WEIGHTS = {
+  financials: 30,
+  assets: 20,
+  owner: 15,
+  safety: 15,
+  handsOff: 10,
+  growth: 10,
+} as const;
+
+export type BoardSubKey = keyof typeof BOARD_PURCHASE_VALUE_WEIGHTS;
+
+export const BOARD_SUB_KEYS = Object.keys(
+  BOARD_PURCHASE_VALUE_WEIGHTS
+) as BoardSubKey[];
+
+/**
+ * IC pillars stay on their stored evidence maxes; the headline rescales each
+ * pillar to the purchase-value weight so old Full IC packs pick up the new mix
+ * without rewriting seller numbers.
+ */
+export const IC_PURCHASE_VALUE_PILLARS = [
+  { key: "financial", label: "Financial quality", max: 20, weight: 25 },
+  { key: "customer", label: "Customer / revenue quality", max: 15, weight: 20 },
+  { key: "operations", label: "Operations", max: 15, weight: 15 },
+  { key: "assets", label: "Asset / downside", max: 10, weight: 12 },
+  { key: "dealStructure", label: "Deal structure / financing", max: 10, weight: 10 },
+  { key: "growth", label: "Growth", max: 15, weight: 8 },
+  { key: "tax", label: "Tax efficiency", max: 10, weight: 5 },
+  { key: "legal", label: "Legal / reg / env", max: 5, weight: 5 },
+] as const;
+
+export function weightedScore(
+  parts: Array<{ score?: number | null; weight: number }>
+): number {
+  let weighted = 0;
+  let weightSum = 0;
+  for (const part of parts) {
+    if (part.score == null || !Number.isFinite(part.score) || part.weight <= 0) {
+      continue;
+    }
+    weighted += part.score * part.weight;
+    weightSum += part.weight;
+  }
+  if (weightSum <= 0) return 0;
+  return Math.round(weighted / weightSum);
+}
+
+export function purchaseValueAverage(
+  scores: Pick<BoardScores, BoardSubKey>
+): number {
+  return weightedScore(
+    BOARD_SUB_KEYS.map((key) => ({
+      score: scores[key]?.score,
+      weight: BOARD_PURCHASE_VALUE_WEIGHTS[key],
+    }))
+  );
+}
+
+export function equalWeightAverage(
+  scores: Pick<BoardScores, BoardSubKey>
+): number {
+  const present = BOARD_SUB_KEYS.map((key) => scores[key]?.score).filter(
+    (score): score is number => score != null && Number.isFinite(score)
+  );
+  if (!present.length) return 0;
+  return Math.round(
+    present.reduce((sum, score) => sum + score, 0) / present.length
+  );
+}
+
+export function icHeadlineScore(scores: DiligencePack["scores"]): number {
+  return weightedScore(
+    IC_PURCHASE_VALUE_PILLARS.map((pillar) => {
+      const raw = scores[pillar.key];
+      if (raw == null || !Number.isFinite(raw) || pillar.max <= 0) {
+        return { score: null, weight: pillar.weight };
+      }
+      const bounded = Math.max(0, Math.min(raw, pillar.max));
+      return {
+        score: (bounded / pillar.max) * 100,
+        weight: pillar.weight,
+      };
+    })
+  );
+}
+
+export function icPillarContribution(
+  score: number,
+  max: number,
+  weight: number
+): number {
+  if (max <= 0) return 0;
+  const bounded = Math.max(0, Math.min(score, max));
+  return Math.round((bounded / max) * weight);
+}
 
 export type BoardScoreMetric =
   | "average"
@@ -18,7 +116,7 @@ export const BOARD_SCORE_METRICS: Array<{
   key: BoardScoreMetric;
   label: string;
 }> = [
-  { key: "average", label: "Average" },
+  { key: "average", label: "Purchase value" },
   { key: "financials", label: "Financials" },
   { key: "owner", label: "Owner" },
   { key: "growth", label: "Growth" },
@@ -274,9 +372,7 @@ export function buildBoardScores(deal: Deal): BoardScores {
     safety: safetyScore(deal),
     assets: assetsScore(deal),
   };
-  const average = clamp(
-    Object.values(scores).reduce((sum, item) => sum + item.score, 0) / 6
-  );
+  const average = purchaseValueAverage(scores);
   return { average, ...scores };
 }
 
@@ -311,7 +407,7 @@ export function headlineScore(deal: Deal) {
   if (deal.diligence) {
     return {
       label: "IC score" as const,
-      score: deal.diligence.scores.total,
+      score: icHeadlineScore(deal.diligence.scores),
       boardAverage: board.average,
     };
   }

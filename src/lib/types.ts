@@ -70,6 +70,7 @@ export type BoxFit =
   | "Unknown";
 export type EarningsQuality = "Tax-tied" | "Recast" | "Unverified";
 export type RecordTag = "Live" | "Seed / Demo";
+export type CloseSpeed = "Fast" | "Mid" | "Slow";
 
 export interface BoardSubScore {
   score: number;
@@ -483,6 +484,7 @@ export interface Deal {
   boxFit?: BoxFit;
   earningsQuality?: EarningsQuality;
   recordTag?: RecordTag;
+  closeSpeed?: CloseSpeed;
   boardScores?: BoardScores;
   location: string;
   state?: string;

@@ -1,4 +1,9 @@
-import { boardScoresFor, headlineScore } from "@/lib/board-scoring";
+import {
+  boardScoresFor,
+  equalWeightAverage,
+  headlineScore,
+} from "@/lib/board-scoring";
+import { ScoreLegend } from "@/components/ScoreLegend";
 import type { Deal } from "@/lib/types";
 
 const SUB_KEYS = [
@@ -38,16 +43,23 @@ export function BoardScorePanel({ deal }: { deal: Deal }) {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <div className="kicker">Listing-level decision score</div>
-          <h2 className="serif text-2xl">Board average</h2>
+          <h2 className="serif text-2xl">Purchase-value score</h2>
           <p className="mt-1 text-sm text-[var(--muted)]">
-            Equal weight across the six sub-scores. Unknown evidence is scored
-            conservatively.
+            Weighted for how buyers price a company: Financials 30, Assets 20,
+            Owner 15, Safety 15, Hands-off 10, Growth 10. Unknown evidence stays
+            conservative. The six subs are unchanged.
           </p>
         </div>
         <div className="text-right">
           <div className="serif text-4xl">
             {scores.average}
             <span className="text-sm text-[var(--muted)]"> / 100</span>
+          </div>
+          <div
+            className="text-[11px] text-[var(--muted)]"
+            title="Simple average of the same six subs. Not used to sort the board."
+          >
+            Equal-weight (legacy) {equalWeightAverage(scores)}
           </div>
           {headline.label === "IC score" && (
             <div className="text-sm font-semibold">
@@ -56,6 +68,7 @@ export function BoardScorePanel({ deal }: { deal: Deal }) {
           )}
         </div>
       </div>
+      <ScoreLegend className="mt-3" />
       <div className="mt-4 grid gap-2 md:grid-cols-3">
         {SUB_KEYS.map((metric) => {
           const item = scores[metric.key];
