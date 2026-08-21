@@ -450,7 +450,7 @@ describe("TESIM business categories and company-specific brief", () => {
   it.each([
     ["East Texas portfolio", "Gas stations / C-stores", "Gas / C-store", "Hands-off"],
     ["ACE Painting", "Commercial painting contractor", "Painting / coatings", "Hands-on"],
-    ["Uniquecoat Technologies", "Industrial technology / thermal spray systems", "Painting / coatings", "Hands-on"],
+    ["Uniquecoat Technologies", "Industrial technology / thermal spray systems", "Industrial equipment / manufacturing other", "Hands-on"],
     ["Mighty Molding", "Plastic injection molding", "Plastic / injection molding", "Hands-on"],
     ["Heartland CNC", "Metal fabrication machine shop", "Metal / fabrication / machine shop", "Hands-on"],
   ] as const)(
@@ -488,13 +488,18 @@ describe("TESIM business categories and company-specific brief", () => {
     }
   });
 
-  it("backfills category and operating-style tags without replacing a deal", () => {
+  it("backfills every scan tag without replacing a deal", () => {
     const deal = baseDeal();
     deal.name = "East Texas portfolio";
     deal.industry = "Gas stations / C-stores";
     expect(ensureDealClassification(deal)).toBe(true);
     expect(deal.businessCategory).toBe("Gas / C-store");
     expect(deal.operatingStyleTags).toEqual(["Hands-off"]);
+    expect(deal.riskSnapshot).toBe("Safer");
+    expect(deal.assetProfile).toBe("Unknown");
+    expect(deal.boxFit).toBe("In-box");
+    expect(deal.earningsQuality).toBe("Unverified");
+    expect(deal.recordTag).toBe("Live");
     expect(deal.id).toBe("finish");
     expect(ensureDealClassification(deal)).toBe(false);
   });
@@ -510,11 +515,15 @@ describe("TESIM business categories and company-specific brief", () => {
     ensureDealClassification(deal);
 
     expect(dealMatchesSearch(deal, "  UNIQUECOAT  ")).toBe(true);
-    expect(dealMatchesSearch(deal, "painting   / coatings")).toBe(true);
+    expect(
+      dealMatchesSearch(deal, "industrial   equipment / manufacturing")
+    ).toBe(true);
     expect(dealMatchesSearch(deal, "hands-on")).toBe(true);
     expect(dealMatchesSearch(deal, "richmond")).toBe(true);
     expect(dealMatchesSearch(deal, "example broker")).toBe(true);
     expect(dealMatchesSearch(deal, "austin thorpe")).toBe(true);
+    expect(dealMatchesSearch(deal, "mixed")).toBe(true);
+    expect(dealMatchesSearch(deal, "recast")).toBe(false);
     expect(dealMatchesSearch(deal, "")).toBe(true);
     expect(dealMatchesSearch(deal, "gas")).toBe(false);
 
@@ -524,6 +533,103 @@ describe("TESIM business categories and company-specific brief", () => {
     ensureDealClassification(gas);
     expect(dealMatchesSearch(gas, "gas")).toBe(true);
     expect(dealMatchesSearch(gas, "hands-off")).toBe(true);
+    expect(dealMatchesSearch(gas, "safer")).toBe(true);
+  });
+
+  it("keeps the known live examples distinct and evidence-bounded", () => {
+    const uniquecoat = baseDeal();
+    uniquecoat.name = "Uniquecoat Technologies, LLC";
+    uniquecoat.industry = "Industrial technology / thermal spray systems";
+    uniquecoat.askingPrice = 4_950_000;
+    uniquecoat.ffe = null;
+    uniquecoat.realEstateIncluded = null;
+    uniquecoat.notes =
+      "Adjusted SDE is seller-provided. Real estate is owned separately and available for acquisition.";
+    ensureDealClassification(uniquecoat);
+    expect(uniquecoat).toMatchObject({
+      businessCategory: "Industrial equipment / manufacturing other",
+      operatingStyleTags: ["Hands-on"],
+      riskSnapshot: "Mixed",
+      assetProfile: "Asset-heavy",
+      boxFit: "In-box",
+      earningsQuality: "Recast",
+    });
+
+    const painting = baseDeal();
+    painting.name = "SE Painting";
+    painting.industry = "Commercial and multifamily painting";
+    painting.askingPrice = 17_900_000;
+    painting.notes =
+      "Adjusted EBITDA is seller-provided. Asset-light model; heavy equipment is rented as needed.";
+    ensureDealClassification(painting);
+    expect(painting).toMatchObject({
+      operatingStyleTags: ["Hands-on"],
+      riskSnapshot: "Riskier",
+      assetProfile: "Asset-light",
+      boxFit: "Too big",
+      earningsQuality: "Recast",
+    });
+    expect(dealMatchesSearch(painting, "riskier")).toBe(true);
+    expect(dealMatchesSearch(painting, "recast")).toBe(true);
+
+    const gas = baseDeal();
+    gas.name = "East Texas portfolio";
+    gas.industry = "Gas stations / C-stores";
+    gas.askingPrice = 35_000_000;
+    gas.ffe = null;
+    gas.realEstateIncluded = null;
+    gas.notes = undefined;
+    ensureDealClassification(gas);
+    expect(gas).toMatchObject({
+      operatingStyleTags: ["Hands-off"],
+      riskSnapshot: "Safer",
+      assetProfile: "Unknown",
+      boxFit: "Too big",
+      earningsQuality: "Unverified",
+    });
+
+    const mighty = baseDeal();
+    mighty.name = "Mighty Molding and Manufacturing";
+    mighty.industry = "Plastic injection molding / industrial manufacturing";
+    mighty.askingPrice = 7_200_000;
+    mighty.ffe = null;
+    mighty.realEstateIncluded = null;
+    mighty.notes = "Reported seller cash flow; focused diligence required.";
+    ensureDealClassification(mighty);
+    expect(mighty.riskSnapshot).toBe("Riskier");
+    expect(mighty.earningsQuality).toBe("Recast");
+
+    const unknown = baseDeal();
+    unknown.name = "Unclassified Opportunity";
+    unknown.industry = "Unknown";
+    unknown.askingPrice = null;
+    unknown.revenue = null;
+    unknown.sde = null;
+    unknown.ebitda = null;
+    unknown.ffe = null;
+    unknown.realEstateIncluded = null;
+    unknown.notes = undefined;
+    ensureDealClassification(unknown);
+    expect(unknown.riskSnapshot).toBe("Unknown");
+    expect(unknown.assetProfile).toBe("Unknown");
+    expect(unknown.boxFit).toBe("Unknown");
+
+    const taxTied = baseDeal();
+    taxTied.name = "Tax-Tied Fixture";
+    taxTied.notes = "Reported earnings reconcile to the supplied tax returns.";
+    ensureDealClassification(taxTied);
+    expect(taxTied.earningsQuality).toBe("Tax-tied");
+  });
+
+  it("marks seed demos so they never appear Safer", () => {
+    const seed = baseDeal();
+    seed.batchId = "batch_seed";
+    seed.source = "Seed list";
+    seed.industry = "Gas station / C-store";
+    ensureDealClassification(seed);
+    expect(seed.recordTag).toBe("Seed / Demo");
+    expect(seed.riskSnapshot).toBe("Unknown");
+    expect(dealMatchesSearch(seed, "seed / demo")).toBe(true);
   });
 });
 

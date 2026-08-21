@@ -14,6 +14,11 @@ The product is a five-step funnel, not a 400-field spreadsheet:
 
 Every screen answers four things: what we know, what we don’t, why it matters, and what to do next.
 
+The broker board also stores and searches compact scan tags on every deal:
+business category, operating style, risk snapshot, asset profile, TESIM box fit,
+and earnings quality. Missing evidence produces `Unknown` or `Unverified`, never
+an optimistic guess. Seed records are marked `Seed / Demo`.
+
 Facts are labeled **Verified**, **Seller provided**, **Estimate**, **AI calculation**, **Assumption**, **Not provided**, **Conflict**, or **External research**. The app will not invent capacity or pick a number when listing and packet disagree.
 
 Inside Step 1, the mandatory Owner Questions run before the normal listing

@@ -3,6 +3,7 @@ import { money, multiple } from "@/lib/format";
 import { ScoreRing } from "./ScoreRing";
 import Link from "next/link";
 import { brokerCall, dealFunnelStep, FUNNEL_STEPS } from "@/lib/pipeline";
+import { DealScanPills } from "./DealScanPills";
 
 export function DealCard({ deal }: { deal: Deal }) {
   const earn = deal.sde || deal.ebitda;
@@ -34,6 +35,7 @@ export function DealCard({ deal }: { deal: Deal }) {
           />
         )}
       </div>
+      <DealScanPills deal={deal} className="mt-3" />
       <dl className="mt-4 grid grid-cols-2 gap-2 text-sm">
         <div>
           <dt className="text-[11px] text-[var(--muted)]">Asking</dt>

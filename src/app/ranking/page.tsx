@@ -17,6 +17,7 @@ import {
   classifyDeal,
   dealMatchesSearch,
 } from "@/lib/classification";
+import { DealScanPills } from "@/components/DealScanPills";
 
 type Persistence = { durable: boolean; note: string; error?: string };
 
@@ -322,13 +323,6 @@ export default function RankingPage() {
               const earnings = deal.sde || deal.ebitda;
               const askingMultiple = multiple(deal.askingPrice, earnings);
               const screen = brokerScreen(deal);
-              const classification = {
-                businessCategory:
-                  deal.businessCategory || classifyDeal(deal).businessCategory,
-                operatingStyleTags:
-                  deal.operatingStyleTags ||
-                  classifyDeal(deal).operatingStyleTags,
-              };
               const step = FUNNEL_STEPS.find(
                 (item) => item.key === screen.step
               );
@@ -348,19 +342,7 @@ export default function RankingPage() {
                     <div className="text-xs text-[var(--muted)]">
                       {deal.industry} · {deal.location}
                     </div>
-                    <div className="mt-2 flex max-w-56 flex-wrap gap-1">
-                      <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-800">
-                        {classification.businessCategory}
-                      </span>
-                      {classification.operatingStyleTags.map((tag) => (
-                        <span
-                          key={tag}
-                          className="rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-semibold text-blue-900"
-                        >
-                          {tag}
-                        </span>
-                      ))}
-                    </div>
+                    <DealScanPills deal={deal} className="mt-2 max-w-64" />
                   </td>
                   <td className="px-3 py-4">
                     <span className="font-semibold">{step?.key}</span>

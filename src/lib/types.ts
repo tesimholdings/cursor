@@ -60,6 +60,16 @@ export type BusinessCategory =
   | "Unknown";
 
 export type OperatingStyle = "Hands-off" | "Hands-on" | "Mixed";
+export type RiskSnapshot = "Safer" | "Mixed" | "Riskier" | "Unknown";
+export type AssetProfile = "Asset-heavy" | "Asset-light" | "Unknown";
+export type BoxFit =
+  | "In-box"
+  | "Stretch"
+  | "Too small"
+  | "Too big"
+  | "Unknown";
+export type EarningsQuality = "Tax-tied" | "Recast" | "Unverified";
+export type RecordTag = "Live" | "Seed / Demo";
 
 export interface Fact<T = string | number | boolean | null> {
   value: T;
@@ -452,6 +462,11 @@ export interface Deal {
   industry: string;
   businessCategory?: BusinessCategory;
   operatingStyleTags?: OperatingStyle[];
+  riskSnapshot?: RiskSnapshot;
+  assetProfile?: AssetProfile;
+  boxFit?: BoxFit;
+  earningsQuality?: EarningsQuality;
+  recordTag?: RecordTag;
   location: string;
   state?: string;
   askingPrice?: number | null;

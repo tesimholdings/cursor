@@ -13,7 +13,7 @@ import { EvidenceBadge, TrafficDot } from "@/components/EvidenceBadge";
 import { ScoreRing } from "@/components/ScoreRing";
 import { resolveAssigneeName } from "@/lib/assign";
 import { OwnerQuestionsPanel } from "@/components/OwnerQuestionsPanel";
-import { classifyDeal } from "@/lib/classification";
+import { DealScanPills } from "@/components/DealScanPills";
 
 export function DealClient({ id }: { id: string }) {
   const [deal, setDeal] = useState<Deal | null>(null);
@@ -87,12 +87,6 @@ export function DealClient({ id }: { id: string }) {
   const broker = brokerScreen(deal);
   const fullIcReady = canRunFullIc(deal);
   const funnelStep = dealFunnelStep(deal);
-  const classification = {
-    businessCategory:
-      deal.businessCategory || classifyDeal(deal).businessCategory,
-    operatingStyleTags:
-      deal.operatingStyleTags || classifyDeal(deal).operatingStyleTags,
-  };
 
   return (
     <div className="space-y-6">
@@ -121,19 +115,7 @@ export function DealClient({ id }: { id: string }) {
             {deal.industry} · {deal.location} · Ask {money(deal.askingPrice)} · Revenue {money(deal.revenue)} · SDE{" "}
             {money(deal.sde)}
           </p>
-          <div className="mt-3 flex flex-wrap gap-2 text-xs font-semibold">
-            <span className="rounded-full bg-slate-100 px-3 py-1 text-slate-800">
-              {classification.businessCategory}
-            </span>
-            {classification.operatingStyleTags.map((tag) => (
-              <span
-                key={tag}
-                className="rounded-full bg-blue-100 px-3 py-1 text-blue-900"
-              >
-                {tag}
-              </span>
-            ))}
-          </div>
+          <DealScanPills deal={deal} className="mt-3" />
         </div>
         <div className="flex items-center gap-4">
           {(s || o) && (
