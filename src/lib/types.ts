@@ -71,6 +71,32 @@ export type BoxFit =
 export type EarningsQuality = "Tax-tied" | "Recast" | "Unverified";
 export type RecordTag = "Live" | "Seed / Demo";
 export type CloseSpeed = "Fast" | "Mid" | "Slow";
+export type DealPictureStatus = "from_cim" | "no_cim";
+export type DealPictureKind =
+  | "CIM_FACT"
+  | "SELLER_CLAIM"
+  | "UNANSWERED"
+  | "PUBLIC";
+
+export interface DealPictureFact {
+  label: string;
+  value: string;
+  kind: DealPictureKind;
+  source?: string;
+}
+
+export interface DealPicture {
+  version: number;
+  status: DealPictureStatus;
+  summary: string;
+  facts: DealPictureFact[];
+  risks: string[];
+  unanswered: string[];
+  rebuiltAt: string;
+  scoreLabel: "Board score" | "IC score";
+  score: number;
+  closeSpeed: CloseSpeed;
+}
 
 export interface BoardSubScore {
   score: number;
@@ -485,6 +511,7 @@ export interface Deal {
   earningsQuality?: EarningsQuality;
   recordTag?: RecordTag;
   closeSpeed?: CloseSpeed;
+  dealPicture?: DealPicture;
   boardScores?: BoardScores;
   location: string;
   state?: string;

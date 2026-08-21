@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { extractDocument } from "@/lib/document-extraction";
 import { id } from "@/lib/format";
-import { analyzePacket, applyPacketAssignments } from "@/lib/packet";
+import { refreshDealFromDocuments } from "@/lib/refresh-deal";
 import { researchDeal } from "@/lib/research";
 import { readStore, updateStore } from "@/lib/store";
 import { storeFailureResponse } from "@/lib/store-response";
@@ -20,14 +20,6 @@ const CATEGORY_CONFIG = {
     stage: DocumentRecord["stage"];
   }
 >;
-
-const PRESERVE_ADVANCED_STATUS = new Set([
-  "diligence",
-  "loi",
-  "financing",
-  "closing",
-  "acquired",
-]);
 
 export async function POST(
   request: Request,
@@ -109,23 +101,7 @@ export async function POST(
           deal.documents.push(document);
         }
       }
-      if (category === "cim") {
-        deal.packet = analyzePacket(deal, "", deal.documents);
-        applyPacketAssignments(deal);
-        if (!PRESERVE_ADVANCED_STATUS.has(deal.status)) {
-          deal.status = "packet_review";
-        }
-      } else if (category === "financials") {
-        // New financial evidence invalidates any prior IC/model output. It
-        // unlocks Step 3 but never runs Full IC automatically.
-        deal.diligence = undefined;
-        deal.financing = undefined;
-        deal.tax = undefined;
-        deal.downside = undefined;
-        if (!PRESERVE_ADVANCED_STATUS.has(deal.status)) {
-          deal.status = "packet_review";
-        }
-      }
+      refreshDealFromDocuments(deal);
       deal.updatedAt = new Date().toISOString();
       return deal;
     });

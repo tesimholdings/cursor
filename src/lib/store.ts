@@ -5,6 +5,7 @@ import type { Store } from "./types";
 import { seedStore } from "./seed";
 import { ensureStoreClassifications } from "./classification";
 import { ensureStoreBoardScores } from "./board-scoring";
+import { ensureStoreDealRefresh } from "./refresh-deal";
 import {
   blobConfiguration,
   blobLocation,
@@ -43,8 +44,12 @@ let queue: Promise<unknown> = Promise.resolve();
 
 function ensureDerivedDealFields(store: Store) {
   const classificationsChanged = ensureStoreClassifications(store.deals);
+  const refreshed = ensureStoreDealRefresh(store.deals);
+  const reclassified = refreshed
+    ? ensureStoreClassifications(store.deals)
+    : false;
   const scoresChanged = ensureStoreBoardScores(store.deals);
-  return classificationsChanged || scoresChanged;
+  return classificationsChanged || refreshed || reclassified || scoresChanged;
 }
 
 export interface StorePersistence {

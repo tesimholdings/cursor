@@ -1,6 +1,19 @@
 import { matchIndustry } from "./industry";
 import { money, multiple, pct } from "./format";
 import { isSafeCitationUrl } from "./public-research";
+import {
+  defaultWhy,
+  firstSentences,
+  isTemplateWhy,
+  tightenAnswer,
+  unanswered as unansweredItem,
+} from "./copy";
+import {
+  cimProse,
+  hasReadableCim,
+  packetText,
+  printedConcentration,
+} from "./deal-picture";
 import type {
   Deal,
   EvidenceKind,
@@ -123,7 +136,7 @@ function make(
     kind,
     known: options.known || [],
     unknown: options.unknown || [],
-    why: options.why || "This changes whether the opportunity deserves more time.",
+    why: options.why || defaultWhy(),
     next: options.next || "NOT AVAILABLE YET — ASK SELLER",
     details: options.details,
     sources:
@@ -157,25 +170,6 @@ function strongestLight(lights: TrafficLight[]): TrafficLight {
   return "green";
 }
 
-function sellerMemoExcerpt(deal: Deal) {
-  const memo = [...deal.documents]
-    .filter(
-      (document) =>
-        document.category === "cim" &&
-        (document.textExcerpt || document.extraction?.chunks.length)
-    )
-    .sort(
-      (a, b) => Date.parse(b.uploadedAt) - Date.parse(a.uploadedAt)
-    )[0];
-  return (
-    memo?.textExcerpt ||
-    memo?.extraction?.chunks.map((chunk) => chunk.text).join(" ")
-  )
-    ?.replace(/\s+/g, " ")
-    .trim()
-    .slice(0, 600);
-}
-
 export function buildOwnerQuestions(deal: Deal): OwnerQuestionReport {
   const ind = matchIndustry(deal.industry, deal.name, deal.notes);
   const earnings = deal.sde || deal.ebitda;
@@ -184,7 +178,6 @@ export function buildOwnerQuestions(deal: Deal): OwnerQuestionReport {
   const revenueMultiple = multiple(deal.askingPrice, deal.revenue);
   const margin = earnings && deal.revenue ? earnings / deal.revenue : null;
   const assetCoverage = deal.ffe && deal.askingPrice ? deal.ffe / deal.askingPrice : null;
-  const memoExcerpt = sellerMemoExcerpt(deal);
   const needed =
     ind.discretionary === "essential"
       ? ind.wantToOwn10Years
@@ -210,27 +203,35 @@ export function buildOwnerQuestions(deal: Deal): OwnerQuestionReport {
   const prospects: Prospect[] = [];
   const companyLeaders: string[] = [];
   const q: OwnerQuestion[] = [];
+  const concentration = printedConcentration(packetText(deal));
 
   q.push(
     make(
       deal,
       1,
-      `${deal.name} appears to sell ${ind.label.toLowerCase()} products or services. ${
-        memoExcerpt ||
-        deal.notes ||
-        "The listing and attached materials do not describe the exact product."
-      } Customers pay for work that solves this problem: ${ind.needed} A typical order moves from request → quote → scheduling/setup → production or service → quality check → delivery → invoice. Employees quote, schedule, operate equipment or perform service, inspect work, ship, and bill. The company makes money on the spread between its selling price and labor, materials, facility, equipment, utilities, maintenance, insurance, and overhead.`,
+      cimProse(deal, 3) ||
+        firstSentences(
+          deal.notes ||
+            unansweredItem(
+              "what they sell, who pays, and how work moves through the shop"
+            ),
+          3
+        ),
       {
-        light: memoExcerpt || deal.notes ? "green" : "yellow",
-        kind: memoExcerpt || deal.notes ? "SELLER_PROVIDED" : "ESTIMATE",
+        light: hasReadableCim(deal) || deal.notes ? "green" : "yellow",
+        kind: hasReadableCim(deal) || deal.notes ? "SELLER_PROVIDED" : "NOT_PROVIDED",
         known: [
           deal.industry,
-          memoExcerpt
-            ? `Attached CIM excerpt: ${memoExcerpt}`
+          hasReadableCim(deal)
+            ? "CIM is on the card"
             : deal.notes || "No listing description",
         ],
-        unknown: ["Exact product mix", "Daily workflow", "Major cost breakdown"],
-        next: "Ask seller for a one-page order-to-cash walkthrough and revenue by product/service.",
+        unknown: [
+          unansweredItem("exact product mix"),
+          unansweredItem("daily workflow"),
+          unansweredItem("major cost breakdown"),
+        ],
+        next: "Ask for a one-page order-to-cash walkthrough and revenue by product/service.",
       }
     ),
     make(
@@ -436,10 +437,12 @@ export function buildOwnerQuestions(deal: Deal): OwnerQuestionReport {
       kind: "ASSUMPTION",
       next: "Put customer-call access into the LOI/diligence conditions when concentration is material.",
     }),
-    make(deal, 30, "Top customer %, top 2, top 3, and top 5 are NOT AVAILABLE. Long relationships do not eliminate concentration risk.", {
-      result: "NOT AVAILABLE YET — ASK SELLER",
-      light: "red",
-      kind: "NOT_PROVIDED",
+    make(deal, 30, concentration
+      ? `CIM prints top-customer concentration at ${concentration}. Confirm the trailing-twelve mix and whether that account is under contract.`
+      : unansweredItem("top-customer % — no source printed a figure"), {
+      result: concentration ? `CIM PRINTS ${concentration}` : "UNANSWERED — no printed customer %",
+      light: concentration ? "yellow" : "red",
+      kind: concentration ? "SELLER_PROVIDED" : "NOT_PROVIDED",
       next: "Request revenue by customer for at least three years. Rate under 20% top customer as preferable, 25–50% high, and over 50% critical.",
     }),
     make(deal, 31, `Top five current risks, ranked on incomplete data: 1) financials are seller-provided and unverified; 2) customer concentration is unknown; 3) owner dependence is unknown; 4) capacity/equipment condition is unknown; 5) ${ind.wantToOwn10Years ? "labor, working capital, and execution during growth" : "industry durability / discretionary demand"}.`, {
@@ -585,6 +588,11 @@ export function buildOwnerQuestions(deal: Deal): OwnerQuestionReport {
     };
   });
 
+  for (const question of q) {
+    question.answer = tightenAnswer(question.answer, deal.name, 3);
+    if (isTemplateWhy(question.why)) question.why = defaultWhy();
+  }
+
   return {
     completedAt: new Date().toISOString(),
     status: "complete",
@@ -598,11 +606,15 @@ export function buildOwnerQuestions(deal: Deal): OwnerQuestionReport {
     decision,
     decisionWhy,
     researchStatus: deal.publicResearch?.status,
-    companyBrief:
-      deal.publicResearch?.status === "complete"
-        ? `Public research collected ${deal.publicResearch.sources.length} source(s). See cited Owner Question answers for grounded findings.`
-        : deal.publicResearch?.reason ||
-          "Public web research is unavailable. Answers use uploaded data and labeled estimates only.",
+    companyBrief: firstSentences(
+      cimProse(deal, 5) ||
+        (deal.publicResearch?.status === "complete"
+          ? "CIM is not on the card. Public sources were fetched as a labeled supplement only — they do not replace a book."
+          : unansweredItem(
+              "a 3–5 sentence CIM picture of what they sell, who pays, how it runs, and the ugly"
+            )),
+      5
+    ),
   };
 }
 

@@ -1,0 +1,89 @@
+import { analyzePacket, applyPacketAssignments } from "./packet";
+import { buildOwnerQuestions } from "./owner-questions";
+import { buildStage1 } from "./screening";
+import { runDiligence } from "./diligence";
+import { canRunFullIc } from "./pipeline";
+import {
+  buildDealPicture,
+  DEAL_PICTURE_VERSION,
+  hasReadableCim,
+  tightenStoredNotes,
+} from "./deal-picture";
+import { firstSentences } from "./copy";
+import type { Deal } from "./types";
+
+const PRESERVE_STATUS = new Set([
+  "diligence",
+  "loi",
+  "financing",
+  "closing",
+  "acquired",
+  "passed",
+]);
+
+export function refreshDealFromDocuments(
+  deal: Deal,
+  options: { rewriteQa?: boolean } = {}
+): boolean {
+  const rewriteQa = options.rewriteQa !== false;
+  const before = snapshot(deal);
+  const cim = hasReadableCim(deal);
+
+  if (cim) {
+    deal.packet = analyzePacket(deal, "", deal.documents);
+    applyPacketAssignments(deal);
+    if (!PRESERVE_STATUS.has(deal.status)) {
+      deal.status = "packet_review";
+    }
+    if (rewriteQa || !deal.ownerQuestions) {
+      deal.ownerQuestions = buildOwnerQuestions(deal);
+      if (deal.ownerQuestions) {
+        deal.screening = buildStage1(deal);
+      }
+    }
+    if (canRunFullIc(deal) && (rewriteQa || !deal.diligence)) {
+      deal.diligence = runDiligence(deal);
+    }
+  }
+
+  const picture = buildDealPicture(deal);
+  deal.dealPicture = picture;
+  if (cim && deal.ownerQuestions) {
+    deal.ownerQuestions.companyBrief = firstSentences(picture.summary, 5);
+  }
+  const nextNotes = tightenStoredNotes(deal, picture.summary);
+  if (nextNotes !== undefined) deal.notes = nextNotes;
+  deal.updatedAt = new Date().toISOString();
+  return snapshot(deal) !== before;
+}
+
+export function ensureDealRefresh(deal: Deal): boolean {
+  const stale =
+    deal.dealPicture?.version !== DEAL_PICTURE_VERSION ||
+    (hasReadableCim(deal) && !deal.packet) ||
+    (hasReadableCim(deal) &&
+      !["packet_review", "diligence", "loi", "financing", "closing", "acquired"].includes(
+        deal.status
+      ) &&
+      deal.status !== "passed");
+  if (!stale && deal.dealPicture) return false;
+  return refreshDealFromDocuments(deal);
+}
+
+export function ensureStoreDealRefresh(deals: Deal[]): boolean {
+  return deals.reduce(
+    (changed, deal) => ensureDealRefresh(deal) || changed,
+    false
+  );
+}
+
+function snapshot(deal: Deal) {
+  return JSON.stringify({
+    picture: deal.dealPicture,
+    packetScore: deal.packet?.score,
+    brief: deal.ownerQuestions?.companyBrief,
+    notes: deal.notes,
+    status: deal.status,
+    ic: deal.diligence?.scores.total,
+  });
+}

@@ -448,3 +448,48 @@ export function compareDealsByHeadline(
 export function sortDealsByHeadline(deals: Deal[], sort: HeadlineSort): Deal[] {
   return [...deals].sort((a, b) => compareDealsByHeadline(a, b, sort));
 }
+
+export type PriceSort = "high" | "low";
+export type PriceBand = "all" | "under5" | "box" | "over10";
+export type BoardSort = HeadlineSort | "price-high" | "price-low";
+
+export function askingPriceValue(deal: Deal): number | null {
+  const ask = deal.askingPrice;
+  if (ask == null || !Number.isFinite(ask) || ask <= 0) return null;
+  return ask;
+}
+
+export function dealInPriceBand(deal: Deal, band: PriceBand): boolean {
+  if (band === "all") return true;
+  const ask = askingPriceValue(deal);
+  if (ask == null) return false;
+  if (band === "under5") return ask < 5_000_000;
+  if (band === "box") return ask >= 5_000_000 && ask <= 10_000_000;
+  return ask > 10_000_000;
+}
+
+export function compareDealsByPrice(
+  a: Deal,
+  b: Deal,
+  sort: PriceSort
+): number {
+  const aAsk = askingPriceValue(a);
+  const bAsk = askingPriceValue(b);
+  const aMissing = aAsk == null;
+  const bMissing = bAsk == null;
+  if (aMissing !== bMissing) return aMissing ? 1 : -1;
+  if (!aMissing && !bMissing && aAsk !== bAsk) {
+    return sort === "high" ? bAsk - aAsk : aAsk - bAsk;
+  }
+  return a.name.localeCompare(b.name);
+}
+
+export function sortDealsByPrice(deals: Deal[], sort: PriceSort): Deal[] {
+  return [...deals].sort((a, b) => compareDealsByPrice(a, b, sort));
+}
+
+export function sortBrokerBoard(deals: Deal[], sort: BoardSort): Deal[] {
+  if (sort === "price-high") return sortDealsByPrice(deals, "high");
+  if (sort === "price-low") return sortDealsByPrice(deals, "low");
+  return sortDealsByHeadline(deals, sort);
+}

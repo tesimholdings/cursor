@@ -15,6 +15,7 @@ import { resolveAssigneeName } from "@/lib/assign";
 import { OwnerQuestionsPanel } from "@/components/OwnerQuestionsPanel";
 import { DealScanPills } from "@/components/DealScanPills";
 import { BoardScorePanel } from "@/components/BoardScores";
+import { DealPicturePanel } from "@/components/DealPicture";
 import { AskAboutDeal } from "@/components/AskAboutDeal";
 import {
   headlineScore,
@@ -140,6 +141,8 @@ export function DealClient({ id }: { id: string }) {
           </div>
         </div>
       </div>
+
+      <DealPicturePanel deal={deal} />
 
       <BoardScorePanel deal={deal} />
 

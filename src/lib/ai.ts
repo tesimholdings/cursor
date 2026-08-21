@@ -7,6 +7,7 @@ import type {
   PublicResearch,
 } from "./types";
 import { validatedResearchSources } from "./public-research";
+import { firstSentences, stripLeadingName, tightenAnswer } from "./copy";
 
 const OwnerResearchEnrichment = z.object({
   updates: z
@@ -51,15 +52,32 @@ export async function enrichOwnerQuestions(
 
   // Even without a synthesis model, expose the fetched evidence rather than
   // pretending that research did not happen.
-  base.companyBrief = research.sources
-    .slice(0, 5)
-    .map(
-      (source) =>
-        `${source.title}: ${
-          source.excerpt?.slice(0, 280) || "Source found; no search excerpt."
-        }`
-    )
-    .join("\n");
+  const packetSources = research.sources.filter(
+    (source) => source.kind === "SELLER_MATERIAL"
+  );
+  const publicSources = research.sources.filter(
+    (source) => source.kind !== "SELLER_MATERIAL"
+  );
+  const briefSource = packetSources.length
+    ? packetSources
+        .slice(0, 2)
+        .map((source) =>
+          (source.excerpt || source.title).replace(/\s+/g, " ").slice(0, 280)
+        )
+        .join(" ")
+    : publicSources
+        .slice(0, 2)
+        .map(
+          (source) =>
+            `Public: ${source.title} — ${
+              source.excerpt?.slice(0, 160) || "no excerpt"
+            }`
+        )
+        .join(" ");
+  base.companyBrief = firstSentences(
+    stripLeadingName(briefSource, deal.name),
+    5
+  );
   base.researchStatus = "complete";
 
   if (!hasAiKey()) return base;
@@ -98,6 +116,10 @@ excerpt. They are prospects, never confirmed customers. Do not fill to 30 by
 guessing; return fewer or none when sources do not support names.
 Keep answers in plain English and explicitly distinguish sourced fact from
 inference. Do not turn estimates into verified facts.
+Never start an answer with the company's legal name — the card already shows it.
+Answers are 1–3 sentences. If unknown, write "Unanswered — {the missing item}".
+Do not paste CIM OCR dumps. Prefer the SELLER_MATERIAL / CIM sources; treat
+Tavily / website hits as a labeled public supplement only.
 
 COMPANY
 ${deal.name} | ${deal.industry} | ${deal.location}
@@ -135,7 +157,7 @@ ${questionPacket}`,
       ) {
         continue;
       }
-      question.answer = update.answer;
+      question.answer = tightenAnswer(update.answer, deal.name, 3);
       question.result = update.result || question.result;
       question.known = update.known;
       question.unknown = update.unknown;

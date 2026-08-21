@@ -50,13 +50,19 @@ export async function researchCompany(deal: Deal): Promise<PublicResearch> {
   }
 
   const apiKey = process.env.TAVILY_API_KEY;
+  const hasSellerBook = sources.some((source) => source.kind === "SELLER_MATERIAL");
   if (apiKey) {
-    const queries = [
-      `"${deal.name}" ${deal.location} ${deal.industry}`,
-      `"${deal.name}" customers equipment employees certifications`,
-      `${deal.industry} United States market size CAGR competitors`,
-      `${deal.industry} largest companies United States`,
-    ];
+    const queries = hasSellerBook
+      ? [
+          `"${deal.name}" ${deal.location || ""} official website`,
+          `"${deal.name}" ${deal.industry}`.trim(),
+        ]
+      : [
+          `"${deal.name}" ${deal.location} ${deal.industry}`,
+          `"${deal.name}" customers equipment employees certifications`,
+          `${deal.industry} United States market size CAGR competitors`,
+          `${deal.industry} largest companies United States`,
+        ];
     for (const query of queries) {
       try {
         const results = await searchTavily(query, apiKey);
@@ -68,7 +74,7 @@ export async function researchCompany(deal: Deal): Promise<PublicResearch> {
           }
           sources.push({
             id: sourceId(canonical),
-            title: result.title?.trim() || new URL(canonical).hostname,
+            title: `Public: ${result.title?.trim() || new URL(canonical).hostname}`,
             url: canonical,
             excerpt: (result.content || "").slice(0, MAX_SOURCE_CHARS),
             query,

@@ -1,4 +1,6 @@
 import { classifyDeal } from "./classification";
+import { firstSentences, stripLeadingName, unanswered } from "./copy";
+import { cimProse, hasReadableCim } from "./deal-picture";
 import { money } from "./format";
 import type { Deal, EvidenceKind } from "./types";
 
@@ -17,13 +19,13 @@ export interface ConciseQuestionAnswer {
   next?: string;
 }
 
-function cleanExcerpt(value: string | undefined, max = 220) {
+function cleanExcerpt(value: string | undefined, max = 180) {
   if (!value) return "";
-  const clean = value.replace(/\s+/g, " ").trim();
+  const clean = stripLeadingName(value.replace(/\s+/g, " ").trim());
   if (clean.length <= max) return clean;
   const shortened = clean.slice(0, max);
   const sentence = shortened.lastIndexOf(".");
-  return `${shortened.slice(0, sentence > 80 ? sentence + 1 : max).trim()}…`;
+  return `${shortened.slice(0, sentence > 60 ? sentence + 1 : max).trim()}…`;
 }
 
 function companyEvidence(deal: Deal) {
@@ -50,7 +52,8 @@ function companyEvidence(deal: Deal) {
   const publicSource =
     deal.publicResearch?.status === "complete"
       ? deal.publicResearch.sources.find(
-          (source) => source.excerpt || source.title
+          (source) =>
+            source.kind !== "SELLER_MATERIAL" && (source.excerpt || source.title)
         )
       : undefined;
   return { note, document, documentExcerpt, publicSource };
@@ -58,7 +61,7 @@ function companyEvidence(deal: Deal) {
 
 function sellerClaims(deal: Deal) {
   return [
-    deal.askingPrice != null ? `asking price ${money(deal.askingPrice)}` : "",
+    deal.askingPrice != null ? `ask ${money(deal.askingPrice)}` : "",
     deal.revenue != null ? `revenue ${money(deal.revenue)}` : "",
     deal.sde != null ? `SDE ${money(deal.sde)}` : "",
     deal.ebitda != null ? `EBITDA ${money(deal.ebitda)}` : "",
@@ -75,48 +78,61 @@ export function companyHighlights(deal: Deal): CompanyHighlights {
   const { note, document, documentExcerpt, publicSource } =
     companyEvidence(deal);
   const claims = sellerClaims(deal);
-  const location = deal.location || "location not provided";
+  const location = deal.location || "location unanswered";
+  const picture = deal.dealPicture?.summary;
+  const cim = hasReadableCim(deal);
 
+  const label = deal.industry || businessCategory;
   const good = take([
-    `${deal.name} is identified as a ${deal.industry || "business type not provided"} opportunity in ${location}; that identity is sufficient for a targeted broker follow-up.`,
+    cim
+      ? firstSentences(
+          cimProse(deal, 1) || picture || `${label} CIM is on the card.`,
+          1
+        )
+      : `${label} in ${location}${
+          note ? `: ${note}` : " — identified well enough for a broker call."
+        }`,
     claims.length
-      ? `${deal.name}'s listing supplies ${claims.join(", ")} for first-pass screening; each remains a seller claim.`
-      : `${deal.name}'s record avoids filling blank economics with estimates; the missing price and earnings fields remain visibly unanswered.`,
-    note
-      ? `${deal.name}'s listing includes a company-specific description: “${note}”`
-      : `${deal.name}'s category is recorded as ${businessCategory}, but the listing has not supplied a narrative description yet.`,
+      ? `${label} listing economics: ${claims.join(", ")} — Seller Claim until a CIM/tax tie-out.`
+      : unanswered(`${label} ask, revenue, and earnings for a first-pass screen`),
+    note && !cim ? `Listing note: “${note}”` : "",
     publicSource
-      ? `Public research for ${deal.name} includes “${publicSource.title}”; any conclusions still have to stay within that source's excerpt.`
-      : `${deal.name} has no completed public-source excerpt to lean on, so this screen stays confined to the supplied listing.`,
-    document
-      ? `${deal.name} has supplied material named “${document.name}” available for evidence review.`
-      : `${deal.name} has a discrete deal record that preserves unanswered fields instead of manufacturing a complete story.`,
+      ? `Public supplement: “${publicSource.title}” — not a substitute for the CIM.`
+      : "",
+    document && !cim
+      ? `Seller file on card: “${document.name}.”`
+      : cim
+        ? `${label} packet is past teaser-only because a CIM is attached.`
+        : "",
   ]).slice(0, 5);
 
   const bad = take([
     claims.length
-      ? `${deal.name}'s listed economics have not been verified against readable financials or a QoE packet.`
-      : `Not in the listing yet for ${deal.name}: asking price, revenue, and seller earnings sufficient for an economics screen.`,
-    `Not in the listing yet for ${deal.name}: customer concentration, named customer evidence, and contract or retention support.`,
-    `Not in the listing yet for ${deal.name}: the owner's weekly duties and evidence that the operation can run without the seller.`,
-    `Not in the listing yet for ${deal.name}: measured utilization, operating bottlenecks, and maintenance or replacement needs.`,
-    !document
-      ? `${deal.name} has no readable CIM or financial/QoE document attached, so Full IC remains unavailable.`
-      : "",
+      ? `${label} listed earnings are not tax-tied unless a tax/QoE file says so.`
+      : unanswered(`${label} asking price, revenue, and seller earnings`),
+    unanswered(`${label} customer % unless a CIM prints it`),
+    unanswered(
+      `${label} owner hours and whether the shop runs without the seller`
+    ),
+    unanswered(`${label} measured utilization and the bottleneck`),
+    !cim ? `No CIM on card for ${label} — listing screen only.` : "",
   ]).slice(0, 5);
 
   const interesting = take([
-    `${deal.name} maps to ${businessCategory} and carries the ${style} operating-style tag under TESIM's category rule; that tag is a screening lens, not proof of actual owner hours.`,
-    `${deal.name}'s ${location} location is known, while local competition and market quality remain unanswered.`,
+    `${businessCategory} / ${style} in ${location} is a screening lens, not proof of hours.`,
     documentExcerpt
-      ? `One supplied excerpt for ${deal.name} says: “${documentExcerpt}”`
-      : `${deal.name} does not yet have a company document excerpt that adds detail beyond the listing record.`,
+      ? `From the file: “${documentExcerpt}”`
+      : note
+        ? `Listing note only: “${note}”`
+        : unanswered(
+            `${label} company-specific excerpt beyond the listing row`
+          ),
     publicSource?.excerpt
-      ? `A fetched public excerpt for ${deal.name} says: “${cleanExcerpt(publicSource.excerpt)}”`
-      : `${deal.name}'s public-research record does not yet provide a usable company-specific excerpt.`,
+      ? `Public excerpt: “${cleanExcerpt(publicSource.excerpt)}”`
+      : "",
     deal.realEstateIncluded === true
-      ? `${deal.name}'s listing says real estate is included; value, condition, and transaction allocation are still unanswered.`
-      : `${deal.name}'s record does not establish that owned real estate is included in the transaction.`,
+      ? `${label}: listing says real estate is included — allocation still unanswered.`
+      : `${label}: owned real estate is not established as part of the ask.`,
   ]).slice(0, 5);
 
   return { good, bad, interesting };
@@ -128,34 +144,36 @@ export function conciseDealQuestions(deal: Deal): ConciseQuestionAnswer[] {
     companyEvidence(deal);
   const claims = sellerClaims(deal);
   const location = deal.location || "a location not supplied";
+  const cim = hasReadableCim(deal);
 
   const questions: ConciseQuestionAnswer[] = [
     {
       question: "What is this company?",
-      answer: documentExcerpt
-        ? `${deal.name} is listed as ${deal.industry || businessCategory} in ${location}. Its supplied ${document?.category.toUpperCase()} says: “${documentExcerpt}”`
-        : note
-          ? `${deal.name} is listed as ${deal.industry || businessCategory} in ${location}. The listing says: “${note}”`
-          : `${deal.name} is listed as ${deal.industry || businessCategory} in ${location}. Not in the listing yet: a plain-English description of what it sells and how work flows.`,
-      kind: documentExcerpt || note ? "SELLER_PROVIDED" : "NOT_PROVIDED",
-      unknown: "Exact product or service mix and day-to-day workflow.",
-      next: "Ask the broker for a two-sentence business description and revenue mix.",
+      answer: firstSentences(
+        cimProse(deal, 2) ||
+          note ||
+          `${deal.industry || businessCategory} in ${location}. ${unanswered("what they sell and how work flows")}`,
+        2
+      ),
+      kind: cim || note ? "SELLER_PROVIDED" : "NOT_PROVIDED",
+      unknown: unanswered("exact product mix"),
+      next: "Ask the broker for a two-sentence description and revenue mix.",
     },
     {
       question: "What economics are actually stated?",
       answer: claims.length
-        ? `${deal.name}'s listing states ${claims.join(", ")}. These are seller claims, not verified earnings or cash flow.`
-        : `Not in the listing yet for ${deal.name}: asking price, revenue, SDE, or EBITDA sufficient for first-pass economics.`,
+        ? `${claims.join(", ")}. Seller Claim, not verified cash flow.`
+        : unanswered("ask, revenue, SDE, or EBITDA"),
       kind: claims.length ? "SELLER_PROVIDED" : "NOT_PROVIDED",
-      unknown: "Normalized earnings, add-backs, working capital, and maintenance capex.",
+      unknown: unanswered("normalized earnings, add-backs, WC, maintenance capex"),
       next: "Request the CIM and readable financials before relying on earnings.",
     },
     {
       question: "How operationally involved does this look?",
-      answer: `${deal.name} is categorized as ${businessCategory} and tagged ${operatingStyleTags[0]} under TESIM's operating-style rule. This is a category-level screen, not evidence of the seller's actual hours or management depth.`,
+      answer: `Categorized ${businessCategory}, tagged ${operatingStyleTags[0]}. Category screen only — not seller hours.`,
       kind: "ASSUMPTION",
-      unknown: "Owner duties, manager authority, and weekly owner hours.",
-      next: "Ask who opens, closes, sells, schedules, hires, and handles exceptions.",
+      unknown: unanswered("owner duties and weekly hours"),
+      next: "Ask who opens, sells, schedules, hires, and handles exceptions.",
     },
   ];
 
@@ -163,10 +181,10 @@ export function conciseDealQuestions(deal: Deal): ConciseQuestionAnswer[] {
     questions.push({
       question: "What did the supplied material add?",
       answer: documentExcerpt
-        ? `${deal.name} includes “${document.name}.” Its extracted text says: “${documentExcerpt}”`
-        : `${deal.name} includes “${document.name},” but no short readable excerpt is available in this view.`,
+        ? `“${document.name}” says: “${documentExcerpt}”`
+        : `“${document.name}” is attached without a short readable excerpt.`,
       kind: "SELLER_PROVIDED",
-      unknown: "Whether the supplied material reconciles to source financial records.",
+      unknown: unanswered("whether the file ties to source financials"),
       next: "Open the evidence trail and verify each material claim.",
     });
   }
@@ -175,20 +193,22 @@ export function conciseDealQuestions(deal: Deal): ConciseQuestionAnswer[] {
     questions.push({
       question: "What did public research add?",
       answer: publicSource.excerpt
-        ? `Research for ${deal.name} includes “${publicSource.title}.” The fetched excerpt says: “${cleanExcerpt(publicSource.excerpt)}”`
-        : `Research for ${deal.name} includes the source “${publicSource.title},” but no excerpt supports a broader factual conclusion.`,
+        ? `Public supplement “${publicSource.title}”: “${cleanExcerpt(publicSource.excerpt)}”`
+        : `Public source “${publicSource.title}” has no usable excerpt.`,
       kind: "EXTERNAL_RESEARCH",
-      unknown: "Any claim not directly supported by the fetched source excerpt.",
-      next: "Use the cited source only; do not infer customers, utilization, or financial performance.",
+      unknown: unanswered("any claim not in the fetched excerpt"),
+      next: "Use the cited source only.",
     });
   }
 
   questions.push({
     question: "What is the next evidence gap?",
-    answer: `Not in the listing yet for ${deal.name}: customer concentration, owner dependence, and verified operating capacity. Those gaps stay unanswered rather than being filled with category boilerplate.`,
+    answer: cim
+      ? unanswered("concentration %, owner hours, and tax-tied earnings if the CIM did not print them")
+      : "No CIM on card. Next step is the book, not more teaser prose.",
     kind: "NOT_PROVIDED",
-    why: "These facts can change the broker call or expose a fatal risk.",
-    next: "Ask for customer revenue, an owner-duty map, and measured capacity evidence.",
+    why: "These facts change the broker call or expose a fatal risk.",
+    next: "Ask for customer revenue, an owner-duty map, and measured capacity.",
   });
 
   return questions;

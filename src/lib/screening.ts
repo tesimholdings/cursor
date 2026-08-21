@@ -2,6 +2,8 @@ import type { Deal, PreNdaDecision, ScreeningQuestion, Stage1Screening, TrafficL
 import { matchIndustry } from "./industry";
 import { money, multiple } from "./format";
 import { scoreStage1 } from "./scoring";
+import { firstSentences, tightenAnswer, unanswered } from "./copy";
+import { cimProse, hasReadableCim } from "./deal-picture";
 
 function q(
   id: number,
@@ -72,9 +74,13 @@ export function buildStage1(deal: Deal): Stage1Screening {
     q(
       1,
       "What does this company actually do?",
-      memoExcerpt || deal.notes
-        ? `${deal.name} is described in supplied seller material as: ${memoExcerpt || deal.notes} In plain English, they likely sell ${ind.label.toLowerCase()} work to customers and get paid when they produce or service that work.`
-        : `${deal.name} appears to be a ${ind.label.toLowerCase()} business in ${deal.location || "an unspecified location"}. They sell work or products in that category to customers who need it for their own operations. Employees typically quote, produce/service, ship, and invoice. We do not yet have a shop-floor description.`,
+      cimProse(deal, 3) ||
+        firstSentences(deal.notes || "", 3) ||
+        unanswered(
+          hasReadableCim(deal)
+            ? "a short CIM description of what they sell and who pays"
+            : "No CIM on card — listing does not describe the shop"
+        ),
       "If we cannot explain the business in one paragraph, we should not buy it.",
       [
         deal.name && `Name: ${deal.name}`,
@@ -86,8 +92,8 @@ export function buildStage1(deal: Deal): Stage1Screening {
       ].filter(Boolean) as string[],
       ["Day-to-day operations", "Exact products/SKUs", "How jobs actually flow through the building"],
       "If the listing is vague, the NDA packet must include photos, equipment list, and a simple process walkthrough.",
-      memoExcerpt || deal.notes ? "green" : "yellow",
-      memoExcerpt || deal.notes ? "SELLER_PROVIDED" : "ESTIMATE"
+      hasReadableCim(deal) || deal.notes ? "green" : "yellow",
+      hasReadableCim(deal) || deal.notes ? "SELLER_PROVIDED" : "NOT_PROVIDED"
     ),
     q(
       2,
@@ -409,6 +415,10 @@ export function buildStage1(deal: Deal): Stage1Screening {
     decision = "MAYBE";
     decisionWhy =
       "The listing math is acceptable, but Step 1A still needs basic owner, customer, or capacity answers.";
+  }
+
+  for (const question of questions) {
+    question.answer = tightenAnswer(question.answer, deal.name, 3);
   }
 
   return {

@@ -39,10 +39,16 @@ import {
   headlineScore,
   icHeadlineScore,
   purchaseValueAverage,
+  dealInPriceBand,
+  sortBrokerBoard,
   sortDealsByHeadline,
+  sortDealsByPrice,
   weightedScore,
 } from "./board-scoring";
 import { closeSpeedFor, closeSpeedResult } from "./close-speed";
+import { buildDealPicture, printedConcentration } from "./deal-picture";
+import { refreshDealFromDocuments } from "./refresh-deal";
+import { defaultWhy } from "./copy";
 import type {
   Deal,
   DocumentRecord,
@@ -699,12 +705,12 @@ describe("existing-deal seller material refresh", () => {
 
     deal.publicResearch = research;
     deal.ownerQuestions = buildOwnerQuestions(deal);
-    expect(deal.ownerQuestions.questions[0].answer).toContain(
-      "applies protective finishes"
+    expect(deal.ownerQuestions.questions[0].answer).toMatch(
+      /applies protective finishes/i
     );
     deal.screening = buildStage1(deal);
-    expect(deal.screening.questions[0].answer).toContain(
-      "applies protective finishes"
+    expect(deal.screening.questions[0].answer).toMatch(
+      /applies protective finishes/i
     );
     expect(companyHighlights(deal).interesting.join(" ")).toContain(
       "applies protective finishes"
@@ -1108,6 +1114,134 @@ describe("TESIM/AIS IC rules", () => {
     expect(result.customers).toHaveLength(0);
     expect(result.concentrationFlag).toBe("UNKNOWN");
     expect(result.fatalRisks.join(" ")).not.toMatch(/customer/i);
+  });
+});
+
+describe("asking-price sort and filter", () => {
+  it("sorts ask high to low and parks no-ask last", () => {
+    const high = { ...baseDeal(), id: "high", name: "High Ask", askingPrice: 12_000_000 };
+    const mid = { ...baseDeal(), id: "mid", name: "Mid Ask", askingPrice: 7_000_000 };
+    const low = { ...baseDeal(), id: "low", name: "Low Ask", askingPrice: 3_000_000 };
+    const none = { ...baseDeal(), id: "none", name: "No Ask", askingPrice: null };
+    expect(sortDealsByPrice([none, low, high, mid], "high").map((deal) => deal.name)).toEqual([
+      "High Ask",
+      "Mid Ask",
+      "Low Ask",
+      "No Ask",
+    ]);
+    expect(sortDealsByPrice([high, none, low, mid], "low").map((deal) => deal.name)).toEqual([
+      "Low Ask",
+      "Mid Ask",
+      "High Ask",
+      "No Ask",
+    ]);
+    expect(sortBrokerBoard([none, high], "price-high")[0].name).toBe("High Ask");
+  });
+
+  it("filters Under $5M / $5–10M / Over $10M without inventing prices", () => {
+    const under = { ...baseDeal(), askingPrice: 4_999_999 };
+    const box = { ...baseDeal(), askingPrice: 5_000_000 };
+    const top = { ...baseDeal(), askingPrice: 10_000_000 };
+    const over = { ...baseDeal(), askingPrice: 10_000_001 };
+    const none = { ...baseDeal(), askingPrice: null };
+    expect(dealInPriceBand(under, "under5")).toBe(true);
+    expect(dealInPriceBand(box, "under5")).toBe(false);
+    expect(dealInPriceBand(box, "box")).toBe(true);
+    expect(dealInPriceBand(top, "box")).toBe(true);
+    expect(dealInPriceBand(over, "box")).toBe(false);
+    expect(dealInPriceBand(over, "over10")).toBe(true);
+    expect(dealInPriceBand(none, "under5")).toBe(false);
+    expect(dealInPriceBand(none, "box")).toBe(false);
+    expect(dealInPriceBand(none, "over10")).toBe(false);
+  });
+});
+
+describe("CIM deal picture and tight copy", () => {
+  it("keeps a listing screen when no CIM is on the card", () => {
+    const deal = baseDeal();
+    deal.notes = "Uniquecoat Technologies LLC appears to sell industrial coatings.";
+    const picture = buildDealPicture(deal);
+    expect(picture.status).toBe("no_cim");
+    expect(picture.summary).toMatch(/No CIM on card/);
+    expect(picture.facts.find((fact) => fact.label === "SDE")?.kind).toBe(
+      "SELLER_CLAIM"
+    );
+    expect(dealFunnelStep(deal)).toBe(1);
+  });
+
+  it("rebuilds the card from a readable CIM and moves past teaser-only", () => {
+    const deal = baseDeal();
+    deal.name = "Uniquecoat Technologies";
+    deal.status = "screened";
+    deal.sde = 1_200_000;
+    deal.documents.push({
+      id: "uct_cim",
+      dealId: deal.id,
+      name: "UCT_CIM.pdf",
+      category: "cim",
+      stage: 2,
+      uploadedAt: new Date().toISOString(),
+      size: 200,
+      textExcerpt:
+        "The shop applies protective finishes for industrial customers using HVAF equipment. About 6 employees run the cells. Adjusted SDE is $1,200,000 after add-backs. Asking price $5,400,000. Revenue $4,100,000.",
+      extraction: {
+        status: "complete",
+        extractedAt: new Date().toISOString(),
+        chunks: [
+          {
+            text: "The shop applies protective finishes for industrial customers using HVAF equipment. About 6 employees run the cells. Adjusted SDE is $1,200,000 after add-backs.",
+            page: 1,
+          },
+        ],
+      },
+    });
+    refreshDealFromDocuments(deal);
+    expect(deal.status).toBe("packet_review");
+    expect(dealFunnelStep(deal)).toBe(2);
+    expect(deal.dealPicture?.status).toBe("from_cim");
+    expect(deal.dealPicture?.summary).toMatch(/applies protective finishes/i);
+    expect(deal.dealPicture?.summary).not.toMatch(/^Uniquecoat Technologies/i);
+    expect(deal.ownerQuestions?.questions[0].answer).toMatch(
+      /applies protective finishes/i
+    );
+    expect(deal.ownerQuestions?.questions[0].answer).not.toMatch(
+      /^Uniquecoat Technologies/i
+    );
+    expect(
+      deal.ownerQuestions?.questions.every(
+        (q) => q.why !== "This changes whether the opportunity deserves more time."
+      )
+    ).toBe(true);
+    expect(deal.ownerQuestions?.questions[0].why).toBe(defaultWhy());
+    expect(deal.screening?.questions[0].answer).toMatch(/applies protective finishes/i);
+    const sde = deal.dealPicture?.facts.find((fact) => fact.label === "SDE");
+    expect(sde?.kind).toBe("SELLER_CLAIM");
+    expect(sde?.value).toMatch(/Seller Claim|recast/i);
+    expect(
+      deal.dealPicture?.facts.find((fact) => fact.label === "Concentration")?.kind
+    ).toBe("UNANSWERED");
+    expect(deal.closeSpeed || closeSpeedFor(deal)).toMatch(/Fast|Mid|Slow/);
+  });
+
+  it("prints concentration only when the CIM states a percent", () => {
+    expect(printedConcentration("Customers are diversified across industrial accounts.")).toBeNull();
+    expect(printedConcentration("Largest customer is 22% of revenue.")).toBe("22%");
+    const deal = baseDeal();
+    deal.documents.push({
+      id: "conc",
+      dealId: deal.id,
+      name: "CIM.pdf",
+      category: "cim",
+      stage: 2,
+      uploadedAt: new Date().toISOString(),
+      size: 10,
+      textExcerpt:
+        "The company provides injection molding for industrial customers. Largest customer is 22% of revenue.",
+    });
+    const picture = buildDealPicture(deal);
+    expect(picture.facts.find((fact) => fact.label === "Concentration")?.value).toBe(
+      "22%"
+    );
   });
 });
 

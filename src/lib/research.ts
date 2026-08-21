@@ -3,6 +3,9 @@ import { buildStage1 } from "./screening";
 import { enrichOwnerQuestions } from "./ai";
 import { buildOwnerQuestions } from "./owner-questions";
 import { researchCompany } from "./public-research";
+import { refreshDealFromDocuments } from "./refresh-deal";
+import { firstSentences } from "./copy";
+import { cimProse, hasReadableCim } from "./deal-picture";
 
 const ADVANCED = new Set([
   "nda_requested",
@@ -32,16 +35,26 @@ export async function researchNext(limit = 3) {
       deal.updatedAt = new Date().toISOString();
       try {
         // Mandatory ordering: Step 1A is persisted before Step 1B is created.
+        refreshDealFromDocuments(deal);
         deal.publicResearch = await researchCompany(deal);
         deal.ownerQuestions = await enrichOwnerQuestions(
           deal,
-          buildOwnerQuestions(deal),
+          deal.ownerQuestions || buildOwnerQuestions(deal),
           deal.publicResearch
         );
+        if (deal.ownerQuestions && hasReadableCim(deal)) {
+          deal.ownerQuestions.companyBrief = firstSentences(
+            cimProse(deal, 5) || deal.ownerQuestions.companyBrief || "",
+            5
+          );
+        }
         const screening = buildStage1(deal);
         deal.screening = screening;
+        refreshDealFromDocuments(deal, { rewriteQa: false });
         deal.researchStatus = "complete";
-        if (!ADVANCED.has(priorStatus)) {
+        if (hasReadableCim(deal) && !["loi", "financing", "closing", "acquired", "passed"].includes(priorStatus)) {
+          deal.status = deal.diligence ? "diligence" : "packet_review";
+        } else if (!ADVANCED.has(priorStatus)) {
           deal.status = screening.decision === "PASS" ? "passed" : "screened";
         } else {
           deal.status = priorStatus;
@@ -72,20 +85,34 @@ export async function researchDeal(id: string, options: { force?: boolean } = {}
     const priorStatus = deal.status;
     deal.researchStatus = "running";
     if (!ADVANCED.has(priorStatus)) deal.status = "screening";
+    refreshDealFromDocuments(deal);
     deal.publicResearch = await researchCompany(deal);
     deal.ownerQuestions = await enrichOwnerQuestions(
       deal,
-      buildOwnerQuestions(deal),
+      deal.ownerQuestions || buildOwnerQuestions(deal),
       deal.publicResearch
     );
+    if (deal.ownerQuestions && hasReadableCim(deal)) {
+      deal.ownerQuestions.companyBrief = firstSentences(
+        cimProse(deal, 5) || deal.ownerQuestions.companyBrief || "",
+        5
+      );
+    }
     const screening = buildStage1(deal);
     deal.screening = screening;
+    refreshDealFromDocuments(deal, { rewriteQa: false });
     deal.researchStatus = "complete";
-    deal.status = ADVANCED.has(priorStatus)
-      ? priorStatus
-      : screening.decision === "PASS"
-        ? "passed"
-        : "screened";
+    deal.status =
+      hasReadableCim(deal) &&
+      !["loi", "financing", "closing", "acquired", "passed"].includes(priorStatus)
+        ? deal.diligence
+          ? "diligence"
+          : "packet_review"
+        : ADVANCED.has(priorStatus)
+          ? priorStatus
+          : screening.decision === "PASS"
+            ? "passed"
+            : "screened";
     deal.updatedAt = new Date().toISOString();
     return deal;
   });

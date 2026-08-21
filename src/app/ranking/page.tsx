@@ -26,9 +26,11 @@ import {
   BOARD_SCORE_METRICS,
   boardScoreValue,
   headlineScore,
-  sortDealsByHeadline,
+  dealInPriceBand,
+  sortBrokerBoard,
   type BoardScoreMetric,
-  type HeadlineSort,
+  type BoardSort,
+  type PriceBand,
 } from "@/lib/board-scoring";
 
 type Persistence = { durable: boolean; note: string; error?: string };
@@ -39,7 +41,8 @@ export default function RankingPage() {
   const [failure, setFailure] = useState<string | null>(null);
   const [researching, setResearching] = useState(false);
   const [bestOnly, setBestOnly] = useState(false);
-  const [headlineSort, setHeadlineSort] = useState<HeadlineSort>("best");
+  const [boardSort, setBoardSort] = useState<BoardSort>("best");
+  const [priceBand, setPriceBand] = useState<PriceBand>("all");
   const [query, setQuery] = useState("");
   const [scoreMetric, setScoreMetric] =
     useState<BoardScoreMetric>("average");
@@ -148,8 +151,11 @@ export default function RankingPage() {
           boardScoreValue(deal, scoreMetric) >= Number(minimumScore)
       );
     }
-    return sortDealsByHeadline(list, headlineSort);
-  }, [deals, bestOnly, filters, query, scoreMetric, minimumScore, headlineSort]);
+    if (priceBand !== "all") {
+      list = list.filter((deal) => dealInPriceBand(deal, priceBand));
+    }
+    return sortBrokerBoard(list, boardSort);
+  }, [deals, bestOnly, filters, query, scoreMetric, minimumScore, boardSort, priceBand]);
 
   return (
     <div className="space-y-6">
@@ -168,32 +174,30 @@ export default function RankingPage() {
           <div
             className="inline-flex rounded-full border border-[var(--line)] bg-white p-1"
             role="group"
-            aria-label="Sort deals by headline score"
+            aria-label="Sort deals by headline score or asking price"
           >
-            <button
-              type="button"
-              className={`rounded-full px-4 py-2 text-sm font-semibold ${
-                headlineSort === "best"
-                  ? "bg-[var(--navy)] text-[#f7f1e4]"
-                  : "text-[var(--ink)]"
-              }`}
-              aria-pressed={headlineSort === "best"}
-              onClick={() => setHeadlineSort("best")}
-            >
-              Best first
-            </button>
-            <button
-              type="button"
-              className={`rounded-full px-4 py-2 text-sm font-semibold ${
-                headlineSort === "worst"
-                  ? "bg-[var(--navy)] text-[#f7f1e4]"
-                  : "text-[var(--ink)]"
-              }`}
-              aria-pressed={headlineSort === "worst"}
-              onClick={() => setHeadlineSort("worst")}
-            >
-              Worst first
-            </button>
+            {(
+              [
+                ["best", "Best first"],
+                ["worst", "Worst first"],
+                ["price-high", "Price high"],
+                ["price-low", "Price low"],
+              ] as const
+            ).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                className={`rounded-full px-4 py-2 text-sm font-semibold ${
+                  boardSort === value
+                    ? "bg-[var(--navy)] text-[#f7f1e4]"
+                    : "text-[var(--ink)]"
+                }`}
+                aria-pressed={boardSort === value}
+                onClick={() => setBoardSort(value)}
+              >
+                {label}
+              </button>
+            ))}
           </div>
           {researching && (
             <span className="text-sm text-[var(--muted)]">
@@ -302,6 +306,19 @@ export default function RankingPage() {
           </select>
         </label>
         <select
+          aria-label="Asking price band"
+          className="rounded-lg border border-[var(--line)] bg-white px-2 py-1"
+          value={priceBand}
+          onChange={(event) =>
+            setPriceBand(event.target.value as PriceBand)
+          }
+        >
+          <option value="all">All asking prices</option>
+          <option value="under5">Under $5M</option>
+          <option value="box">$5–10M</option>
+          <option value="over10">Over $10M</option>
+        </select>
+        <select
           className="rounded-lg border border-[var(--line)] bg-white px-2 py-1"
           value={filters.call}
           onChange={(event) =>
@@ -389,8 +406,15 @@ export default function RankingPage() {
 
       <p className="text-sm text-[var(--muted)]">
         Showing {ranked.length} of {deals.length}{" "}
-        {headlineSort === "best" ? "best first" : "worst first"} by the card
-        headline. Search and filters apply first.
+        {boardSort === "best"
+          ? "best first by headline"
+          : boardSort === "worst"
+            ? "worst first by headline"
+            : boardSort === "price-high"
+              ? "ask high to low"
+              : "ask low to high"}
+        . Search and filters apply first. Deals with no ask sit last on Price
+        sort.
       </p>
 
       <div
