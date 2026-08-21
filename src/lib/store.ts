@@ -43,7 +43,7 @@ export function storePersistence(): StorePersistence {
 
 function persist(store: Store) {
   try {
-    if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+    fs.mkdirSync(DATA_DIR, { recursive: true });
     fs.writeFileSync(STORE_PATH, JSON.stringify(store, null, 2));
     durable = true;
     lastPersistError = undefined;
@@ -58,10 +58,8 @@ function persist(store: Store) {
 export async function readStore(): Promise<Store> {
   if (cache) return cache;
   try {
-    if (fs.existsSync(STORE_PATH)) {
-      cache = JSON.parse(fs.readFileSync(STORE_PATH, "utf8")) as Store;
-      return cache;
-    }
+    cache = JSON.parse(fs.readFileSync(STORE_PATH, "utf8")) as Store;
+    return cache;
   } catch (error) {
     lastPersistError =
       error instanceof Error ? error.message : "Unreadable store file";
