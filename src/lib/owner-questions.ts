@@ -11,6 +11,7 @@ import {
 import {
   cimProse,
   hasReadableCim,
+  listingProse,
   packetText,
   printedConcentration,
 } from "./deal-picture";
@@ -210,6 +211,7 @@ export function buildOwnerQuestions(deal: Deal): OwnerQuestionReport {
       deal,
       1,
       cimProse(deal, 3) ||
+        listingProse(deal, 3) ||
         firstSentences(
           deal.notes ||
             unansweredItem(
@@ -218,8 +220,12 @@ export function buildOwnerQuestions(deal: Deal): OwnerQuestionReport {
           3
         ),
       {
-        light: hasReadableCim(deal) || deal.notes ? "green" : "yellow",
-        kind: hasReadableCim(deal) || deal.notes ? "SELLER_PROVIDED" : "NOT_PROVIDED",
+        light: hasReadableCim(deal) || Boolean(listingProse(deal, 1) || deal.notes)
+          ? "green"
+          : "yellow",
+        kind: hasReadableCim(deal) || Boolean(listingProse(deal, 1) || deal.notes)
+          ? "SELLER_PROVIDED"
+          : "NOT_PROVIDED",
         known: [
           deal.industry,
           hasReadableCim(deal)
@@ -608,11 +614,12 @@ export function buildOwnerQuestions(deal: Deal): OwnerQuestionReport {
     researchStatus: deal.publicResearch?.status,
     companyBrief: firstSentences(
       cimProse(deal, 5) ||
-        (deal.publicResearch?.status === "complete"
-          ? "CIM is not on the card. Public sources were fetched as a labeled supplement only — they do not replace a book."
-          : unansweredItem(
+        listingProse(deal, 5) ||
+        (hasReadableCim(deal)
+          ? unansweredItem(
               "a 3–5 sentence CIM picture of what they sell, who pays, how it runs, and the ugly"
-            )),
+            )
+          : "No CIM on card. This is a listing / teaser screen only — do not underwrite a book that is not here."),
       5
     ),
   };

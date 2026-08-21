@@ -1223,6 +1223,51 @@ describe("CIM deal picture and tight copy", () => {
     expect(deal.closeSpeed || closeSpeedFor(deal)).toMatch(/Fast|Mid|Slow/);
   });
 
+  it("does not treat a demo placeholder or a 60–70% repeat-revenue line as a book", () => {
+    const placeholder = baseDeal();
+    placeholder.documents.push({
+      id: "demo",
+      dealId: placeholder.id,
+      name: "Mighty-Molding-CIM.txt",
+      category: "cim",
+      stage: 2,
+      uploadedAt: new Date().toISOString(),
+      size: 80,
+      textExcerpt:
+        "Demo CIM placeholder. Customer concentration, contracts, certifications, equipment schedule, utilization, capacity, and verified financials are NOT PROVIDED.",
+    });
+    expect(buildDealPicture(placeholder).status).toBe("no_cim");
+
+    const uniquecoatText =
+      "Highly recurring revenue profile: 60–70% of annual orders from repeat customers. Trailing 3-year avg revenue $2,246,787. Adjusted SDE $1,296,396 after add-backs.";
+    expect(printedConcentration(uniquecoatText)).toBeNull();
+    const deal = baseDeal();
+    deal.sde = 1_296_396;
+    deal.documents.push({
+      id: "uct",
+      dealId: deal.id,
+      name: "UCT_CIM.pdf",
+      category: "cim",
+      stage: 2,
+      uploadedAt: new Date().toISOString(),
+      size: 20,
+      textExcerpt: uniquecoatText,
+    });
+    const picture = buildDealPicture(deal);
+    expect(picture.facts.find((fact) => fact.label === "Revenue")?.value).toMatch(
+      /2\.25M|2,246,787/
+    );
+    expect(picture.facts.find((fact) => fact.label === "Revenue")?.value).not.toMatch(
+      /\$60\b/
+    );
+    expect(picture.facts.find((fact) => fact.label === "Concentration")?.kind).toBe(
+      "UNANSWERED"
+    );
+    expect(picture.facts.find((fact) => fact.label === "SDE")?.kind).toBe(
+      "SELLER_CLAIM"
+    );
+  });
+
   it("prints concentration only when the CIM states a percent", () => {
     expect(printedConcentration("Customers are diversified across industrial accounts.")).toBeNull();
     expect(printedConcentration("Largest customer is 22% of revenue.")).toBe("22%");

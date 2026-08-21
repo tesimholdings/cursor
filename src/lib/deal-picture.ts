@@ -10,14 +10,36 @@ import { money, multiple } from "./format";
 import { headlineScore } from "./board-scoring";
 import type { Deal, DealPicture, DealPictureFact, DocumentRecord } from "./types";
 
-export const DEAL_PICTURE_VERSION = 1;
+export const DEAL_PICTURE_VERSION = 2;
 
 const BUSINESS_HINT =
   /\b(provides?|manufactur|sells?|specializ|serves?|produces?|offers?|operat|designs?|installs?|customers?|revenue|employees?|injection|thermal spray|landscap|contractor|general contractor)\b/i;
 
 export function hasReadableCim(deal: Deal) {
   return deal.documents.some(
-    (document) => document.category === "cim" && documentHasText(document)
+    (document) =>
+      document.category === "cim" &&
+      documentHasText(document) &&
+      !isPlaceholderCim(documentText(document))
+  );
+}
+
+function documentText(document: DocumentRecord) {
+  return (
+    document.textExcerpt ||
+    readableDocumentText(document.extraction?.chunks || [])
+  )
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export function isPlaceholderCim(text: string) {
+  const compact = text.replace(/\s+/g, " ").trim();
+  return (
+    /demo cim placeholder/i.test(compact) ||
+    (compact.length < 280 &&
+      /not provided\.?$/i.test(compact) &&
+      /concentration, contracts, certifications/i.test(compact))
   );
 }
 
@@ -45,9 +67,30 @@ export function packetText(
     .trim();
 }
 
+const SKIP_PROSE =
+  /page \d+|table of contents|confidential information memorandum|notice of confidentiality|demo cim placeholder|are not provided|tavily public screen|identity: (confirmed|mismatch)|ais tight copy/i;
+
+export function listingProse(deal: Deal, maxSentences = 4) {
+  const brief = deal.documents
+    .filter((document) => document.category === "listing")
+    .map((document) => documentText(document))
+    .map((text) => {
+      const briefMatch = text.match(/\bBRIEF\s+(.{80,700})/i);
+      return (briefMatch?.[1] || text).replace(/\s+/g, " ").trim();
+    })
+    .find(
+      (text) =>
+        text.length >= 60 &&
+        BUSINESS_HINT.test(text) &&
+        !/tavily public screen|identity: (confirmed|mismatch)/i.test(text)
+    );
+  if (!brief) return "";
+  return firstSentences(stripLeadingName(brief, deal.name), maxSentences);
+}
+
 export function cimProse(deal: Deal, maxSentences = 4) {
   const raw = packetText(deal, ["cim"]);
-  if (!raw) return "";
+  if (!raw || isPlaceholderCim(raw)) return listingProse(deal, maxSentences);
   const parts = raw
     .split(/(?<=[.!?])\s+/)
     .map((part) => part.replace(/\s+/g, " ").trim())
@@ -55,20 +98,27 @@ export function cimProse(deal: Deal, maxSentences = 4) {
       (part) =>
         part.length >= 40 &&
         part.length <= 320 &&
-        !/page \d+|table of contents|confidential information memorandum|notice of confidentiality/i.test(
-          part
-        )
+        !SKIP_PROSE.test(part)
     );
   const useful = parts.filter((part) => BUSINESS_HINT.test(part));
   const chosen = (useful.length ? useful : parts).slice(0, maxSentences);
-  return stripLeadingName(chosen.join(" "), deal.name);
+  return (
+    stripLeadingName(chosen.join(" "), deal.name) ||
+    listingProse(deal, maxSentences)
+  );
 }
 
 export function printedConcentration(text: string) {
   const match = text.match(
-    /\b(?:top|largest|single)?\s*customer[^.%]{0,40}?(\d{1,2}(?:\.\d+)?)\s*%/i
+    /\b(?:top|largest|single|#1|number one)\s+customer[^.%]{0,50}?(\d{1,2}(?:\.\d+)?)\s*%/i
   );
-  return match ? `${match[1]}%` : null;
+  if (!match) return null;
+  const around = text.slice(
+    Math.max(0, (match.index || 0) - 8),
+    (match.index || 0) + match[0].length + 8
+  );
+  if (/\d\s*[–-]\s*\d/.test(around)) return null;
+  return `${match[1]}%`;
 }
 
 function fact(
@@ -97,25 +147,35 @@ function moneyFact(
 
 function locateMoney(text: string, labels: string[]) {
   for (const label of labels) {
-    const match = text.match(
+    const matches = text.matchAll(
       new RegExp(
-        `${label}[^\\d$]{0,24}\\$?\\s*([0-9][0-9,]*(?:\\.\\d+)?)\\s*(m|k|million)?`,
-        "i"
+        `${label}[^\\d$%]{0,28}(\\$)?\\s*([0-9][0-9,]*(?:\\.\\d+)?)(\\s*(m|k|million))?`,
+        "gi"
       )
     );
-    if (!match) continue;
-    let value = Number(match[1].replace(/,/g, ""));
-    const suffix = (match[2] || "").toLowerCase();
-    if (suffix === "k") value *= 1_000;
-    if (suffix === "m" || suffix === "million") value *= 1_000_000;
-    if (value > 0) return value;
+    for (const match of matches) {
+      const tail = text.slice(
+        (match.index || 0) + match[0].length,
+        (match.index || 0) + match[0].length + 3
+      );
+      if (/%/.test(tail) || /[–-]/.test(tail)) continue;
+      const raw = match[2];
+      const hasDollar = Boolean(match[1]);
+      const hasComma = raw.includes(",");
+      const suffix = (match[4] || "").toLowerCase();
+      if (!hasDollar && !hasComma && !suffix) continue;
+      let value = Number(raw.replace(/,/g, ""));
+      if (suffix === "k") value *= 1_000;
+      if (suffix === "m" || suffix === "million") value *= 1_000_000;
+      if (value >= 10_000) return value;
+    }
   }
   return null;
 }
 
 export function buildDealPicture(deal: Deal): DealPicture {
   const cim = hasReadableCim(deal);
-  const text = packetText(deal);
+  const text = packetText(deal, ["cim", "financials"]);
   const cimText = packetText(deal, ["cim"]);
   const close = closeSpeedFor(deal);
   const headline = headlineScore(deal);
@@ -123,8 +183,9 @@ export function buildDealPicture(deal: Deal): DealPicture {
     return {
       version: DEAL_PICTURE_VERSION,
       status: "no_cim",
-      summary:
-        "No CIM on card. This is a listing / teaser screen only — do not underwrite a book that is not here.",
+      summary: listingProse(deal, 2)
+        ? `No CIM on card. Listing / teaser screen only. ${listingProse(deal, 2)}`
+        : "No CIM on card. This is a listing / teaser screen only — do not underwrite a book that is not here.",
       facts: [
         moneyFact("Asking price", deal.askingPrice, null),
         moneyFact("Revenue", deal.revenue, null),
@@ -190,7 +251,7 @@ export function buildDealPicture(deal: Deal): DealPicture {
     /customer[\s-]owned (?:molds?|tooling)|customers own their patented molds/i.test(text)
       ? "Customer-owned molds / tooling called out in the CIM."
       : "",
-    /government|county government|federal government|set[\s-]?aside|8\(a\)|wbe|mbe/i.test(
+    /government[\s-]?(?:contractor|gc|project)|county government|federal government|set[\s-]?aside|8\(a\)\b|\bwbe\b|\bmbe\b/i.test(
       text
     )
       ? "Government / public-sector work is in the CIM — treat close speed as Slow."

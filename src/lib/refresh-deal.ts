@@ -35,21 +35,25 @@ export function refreshDealFromDocuments(
     if (!PRESERVE_STATUS.has(deal.status)) {
       deal.status = "packet_review";
     }
-    if (rewriteQa || !deal.ownerQuestions) {
-      deal.ownerQuestions = buildOwnerQuestions(deal);
-      if (deal.ownerQuestions) {
-        deal.screening = buildStage1(deal);
-      }
-    }
     if (canRunFullIc(deal) && (rewriteQa || !deal.diligence)) {
       deal.diligence = runDiligence(deal);
     }
   }
 
+  if (rewriteQa || !deal.ownerQuestions) {
+    deal.ownerQuestions = buildOwnerQuestions(deal);
+    if (deal.ownerQuestions) {
+      deal.screening = buildStage1(deal);
+    }
+  }
+
   const picture = buildDealPicture(deal);
   deal.dealPicture = picture;
-  if (cim && deal.ownerQuestions) {
-    deal.ownerQuestions.companyBrief = firstSentences(picture.summary, 5);
+  if (deal.ownerQuestions) {
+    deal.ownerQuestions.companyBrief = firstSentences(
+      picture.summary || deal.ownerQuestions.companyBrief || "",
+      5
+    );
   }
   const nextNotes = tightenStoredNotes(deal, picture.summary);
   if (nextNotes !== undefined) deal.notes = nextNotes;

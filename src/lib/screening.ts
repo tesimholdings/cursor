@@ -3,7 +3,7 @@ import { matchIndustry } from "./industry";
 import { money, multiple } from "./format";
 import { scoreStage1 } from "./scoring";
 import { firstSentences, tightenAnswer, unanswered } from "./copy";
-import { cimProse, hasReadableCim } from "./deal-picture";
+import { cimProse, hasReadableCim, listingProse } from "./deal-picture";
 
 function q(
   id: number,
@@ -75,6 +75,7 @@ export function buildStage1(deal: Deal): Stage1Screening {
       1,
       "What does this company actually do?",
       cimProse(deal, 3) ||
+        listingProse(deal, 3) ||
         firstSentences(deal.notes || "", 3) ||
         unanswered(
           hasReadableCim(deal)
