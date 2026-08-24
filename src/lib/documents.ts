@@ -26,6 +26,7 @@ export function isGeneratedPacketFile(document: Pick<DocumentRecord, "name">) {
 
 export function isPrimaryCimDocument(document: DocumentRecord) {
   if (isGeneratedPacketFile(document)) return false;
+  if (!/\.pdf$/i.test(document.name)) return false;
   if (document.category === "cim") return true;
   return PRIMARY_CIM_NAME.test(document.name);
 }

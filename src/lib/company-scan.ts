@@ -67,7 +67,8 @@ export function displayFacts(deal: Deal, picture: DealPicture): DealPictureFact[
     .filter((fact) => !isUnansweredFact(fact))
     .filter((fact) => fact.label.toLowerCase() !== "name")
     .slice(0, 8)
-    .map((fact) => recastSellerClaim(fact, deal));
+    .map((fact) => recastSellerClaim(fact, deal))
+    .map(compactFactValue);
 }
 
 function recastSellerClaim(fact: DealPictureFact, deal: Deal): DealPictureFact {
@@ -87,8 +88,22 @@ function recastSellerClaim(fact: DealPictureFact, deal: Deal): DealPictureFact {
   };
 }
 
+function compactFactValue(fact: DealPictureFact): DealPictureFact {
+  if (fact.kind !== "SELLER_CLAIM") return fact;
+  return {
+    ...fact,
+    value: fact.value
+      .replace(/\s*\((Seller Claim(?:\s*[—–-]\s*recast)?)\)/gi, "")
+      .replace(/\s+Seller Claim(?:\s*[—–-]\s*recast)?/gi, "")
+      .trim(),
+  };
+}
+
 export function scanSummary(deal: Deal, picture: DealPicture) {
   let summary = picture.summary || "";
+  if (primaryCimDocument(deal)) {
+    summary = summary.replace(/^No CIM on card\.?\s*/i, "");
+  }
   if (picture.ugly) {
     summary = summary.replace(picture.ugly, " ");
   }

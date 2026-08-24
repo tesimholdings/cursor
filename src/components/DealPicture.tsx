@@ -23,7 +23,9 @@ export function DealPicturePanel({ deal }: { deal: Deal }) {
       {scan.ugly ? (
         <p className="mt-4 text-sm font-semibold">Ugly: {scan.ugly}</p>
       ) : null}
-      <p className="mt-3 text-sm font-semibold">{scan.callLine}</p>
+      {scan.callLine && scan.callLine !== scan.call ? (
+        <p className="mt-3 text-sm font-semibold">{scan.callLine}</p>
+      ) : null}
     </section>
   );
 }

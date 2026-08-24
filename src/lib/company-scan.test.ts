@@ -80,6 +80,10 @@ describe("company scan CIM and documents", () => {
       documents: [doc({ id: "cbr", name: "Colom-CBR.pdf" })],
     });
     expect(primaryCimDocument(cbr)?.name).toBe("Colom-CBR.pdf");
+    const txt = deal({
+      documents: [doc({ id: "txt", name: "Mighty-Molding-CIM.txt", category: "cim" })],
+    });
+    expect(primaryCimDocument(txt)).toBeNull();
   });
 
   it("returns a clickable document URL for GET/Open CIM", () => {
@@ -183,8 +187,8 @@ describe("company scan copy", () => {
     expect(scan.facts.find((fact) => fact.label === "T3 avg SDE")?.kind).toBe(
       "SELLER_CLAIM"
     );
-    expect(scan.facts.find((fact) => fact.label === "T3 avg SDE")?.value).toMatch(
-      /Seller Claim/
+    expect(scan.facts.find((fact) => fact.label === "T3 avg SDE")?.value).toBe(
+      "$1,296,396"
     );
     expect(scan.primaryCim).toBeNull();
     expect(scan.nextAction).toMatch(/CIM/i);
@@ -206,6 +210,26 @@ describe("company scan copy", () => {
       },
     });
     expect(scanSummary(named, named.dealPicture!)).not.toMatch(/Lawrence Furniture/i);
+
+    const withCim = deal({
+      documents: [doc({ id: "cim", name: "UCT_CIM_6326.pdf", category: "cim" })],
+      dealPicture: {
+        version: 7,
+        status: "no_cim",
+        summary: "No CIM on card. Custom molder serving industrial accounts.",
+        facts: [],
+        risks: [],
+        unanswered: [],
+        rebuiltAt: new Date().toISOString(),
+        scoreLabel: "Board score",
+        score: 48,
+        closeSpeed: "Slow",
+      },
+    });
+    expect(scanSummary(withCim, withCim.dealPicture!)).toBe(
+      "Custom molder serving industrial accounts."
+    );
+    expect(scanSummary(withCim, withCim.dealPicture!)).not.toMatch(/No CIM on card/i);
   });
 
   it("hides template-fluff Owner Q&A", () => {
