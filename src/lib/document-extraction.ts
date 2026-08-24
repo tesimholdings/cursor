@@ -233,7 +233,16 @@ export function guessDocumentCategory(
   name: string
 ): DocumentRecord["category"] {
   const value = name.toLowerCase();
-  if (value.includes("cim") || value.includes("offering memo")) return "cim";
+  if (
+    value.includes("cim") ||
+    value.includes("offering memo") ||
+    /\bteaser\b/.test(value) ||
+    /\bcbr\b/.test(value) ||
+    /\bexec(utive)?[\s._-]*summ/.test(value) ||
+    /confidential[\s._-]*information/.test(value)
+  ) {
+    if (!/^tavily-|ais-tight-copy-|ais[_-]tight/.test(value)) return "cim";
+  }
   if (
     value.includes("p&l") ||
     value.includes("pnl") ||

@@ -77,9 +77,9 @@ button { cursor: pointer; font-family: inherit; }
   color: var(--ink);
 }
 
-.btn-danger {
-  background: var(--red);
-  color: white;
+.btn-xl {
+  padding: 14px 28px;
+  font-size: 16px;
 }
 
 .kicker {

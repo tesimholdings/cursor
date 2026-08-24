@@ -9,23 +9,27 @@ export const FUNNEL_STEPS: Array<{
   key: FunnelStepNumber;
   label: string;
   shortLabel: string;
+  scanLabel: string;
 }> = [
   {
     key: 1,
     label: "1. Listing / teaser screen (pre-NDA)",
     shortLabel: "Listing / teaser",
+    scanLabel: "Listing/teaser",
   },
-  { key: 2, label: "2. NDA + CIM", shortLabel: "NDA + CIM" },
+  { key: 2, label: "2. NDA + CIM", shortLabel: "NDA + CIM", scanLabel: "NDA + CIM" },
   {
     key: 3,
     label: "3. Financials / QoE packet",
     shortLabel: "Financials / QoE",
+    scanLabel: "Financials/QoE",
   },
-  { key: 4, label: "4. Full IC", shortLabel: "Full IC" },
+  { key: 4, label: "4. Full IC", shortLabel: "Full IC", scanLabel: "Full IC" },
   {
     key: 5,
     label: "5. LOI / price / structure",
     shortLabel: "LOI / structure",
+    scanLabel: "LOI",
   },
 ];
 

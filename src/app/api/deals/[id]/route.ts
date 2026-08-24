@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { applyDealPatch } from "@/lib/deal-patch";
+import { withClickableDocumentUrls } from "@/lib/documents";
 import { readStore, updateStore } from "@/lib/store";
 import { storeFailureResponse } from "@/lib/store-response";
 
@@ -13,7 +14,11 @@ export async function GET(
   const store = await readStore();
   const deal = store.deals.find((d) => d.id === id);
   if (!deal) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  return NextResponse.json({ deal, teams: store.teams });
+  const origin = new URL(_.url).origin;
+  return NextResponse.json({
+    deal: withClickableDocumentUrls(deal, origin),
+    teams: store.teams,
+  });
 }
 
 export async function PATCH(
@@ -30,7 +35,8 @@ export async function PATCH(
       return d;
     });
     if (!deal) return NextResponse.json({ error: "Not found" }, { status: 404 });
-    return NextResponse.json({ deal });
+    const origin = new URL(req.url).origin;
+    return NextResponse.json({ deal: withClickableDocumentUrls(deal, origin) });
   } catch (error) {
     return storeFailureResponse(error);
   }

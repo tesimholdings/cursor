@@ -1,4 +1,5 @@
 import type { Deal, PipelineStatus } from "./types";
+import { mergeDocumentMetadata } from "./documents";
 
 export const DEAL_PATCH_FIELDS = [
   "status",
@@ -10,6 +11,7 @@ export const DEAL_PATCH_FIELDS = [
   "ownerQuestions",
   "screening",
   "publicResearch",
+  "documents",
 ] as const;
 
 export type DealPatchField = (typeof DEAL_PATCH_FIELDS)[number];
@@ -29,6 +31,12 @@ export function applyDealPatch(
   if (body.screening) deal.screening = body.screening as Deal["screening"];
   if (body.publicResearch)
     deal.publicResearch = body.publicResearch as Deal["publicResearch"];
+  if (body.documents) {
+    deal.documents = mergeDocumentMetadata(
+      deal.documents,
+      body.documents as Deal["documents"]
+    );
+  }
   deal.updatedAt = new Date().toISOString();
   return deal;
 }

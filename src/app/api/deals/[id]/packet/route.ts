@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { updateStore } from "@/lib/store";
 import { analyzePacket, applyPacketAssignments } from "@/lib/packet";
+import { storeUploadedDocument } from "@/lib/document-files";
 import { id } from "@/lib/format";
 import type { DocumentRecord } from "@/lib/types";
 import {
@@ -22,16 +23,19 @@ export async function POST(
     if (!(file instanceof File)) continue;
     const buffer = Buffer.from(await file.arrayBuffer());
     const extraction = await extractDocument(file.name, buffer, file.type);
-    uploadedDocuments.push({
-      id: id("doc"),
-      dealId,
-      name: file.name,
-      category: classifyDocument(file.name, extraction),
-      stage: 2,
-      uploadedAt: new Date().toISOString(),
-      size: file.size,
-      extraction,
-    });
+    uploadedDocuments.push(
+      await storeUploadedDocument({
+        id: id("doc"),
+        dealId,
+        name: file.name,
+        category: classifyDocument(file.name, extraction),
+        stage: 2,
+        uploadedAt: new Date().toISOString(),
+        size: file.size,
+        extraction,
+        buffer,
+      })
+    );
   }
   const pasted = String(form.get("text") || "").trim();
   if (pasted) {

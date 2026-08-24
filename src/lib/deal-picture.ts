@@ -263,7 +263,10 @@ function answered(item: DealPictureFact | null): item is DealPictureFact {
 }
 
 export function visibleDealPictureFacts(facts: DealPictureFact[]) {
-  return facts.filter((item) => item.kind !== "UNANSWERED");
+  return facts.filter(
+    (item) =>
+      item.kind !== "UNANSWERED" && !/^unanswered\b/i.test(item.value.trim())
+  );
 }
 
 export function buildDealPicture(deal: Deal): DealPicture {

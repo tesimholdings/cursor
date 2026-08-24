@@ -1,5 +1,11 @@
 import { NextResponse } from "next/server";
 import { extractDocument } from "@/lib/document-extraction";
+import { storeUploadedDocument } from "@/lib/document-files";
+import {
+  documentClickUrl,
+  documentMetadata,
+  withClickableDocumentUrls,
+} from "@/lib/documents";
 import { id } from "@/lib/format";
 import { refreshDealFromDocuments } from "@/lib/refresh-deal";
 import { researchDeal } from "@/lib/research";
@@ -8,6 +14,7 @@ import { storeFailureResponse } from "@/lib/store-response";
 import type { DocumentRecord } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 const CATEGORY_CONFIG = {
   cim: { documentCategory: "cim", stage: 2 },
@@ -20,6 +27,25 @@ const CATEGORY_CONFIG = {
     stage: DocumentRecord["stage"];
   }
 >;
+
+export async function GET(
+  request: Request,
+  context: { params: Promise<{ id: string }> }
+) {
+  const { id: dealId } = await context.params;
+  const store = await readStore();
+  const deal = store.deals.find((candidate) => candidate.id === dealId);
+  if (!deal) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+  const origin = new URL(request.url).origin;
+  return NextResponse.json({
+    documents: deal.documents.map((document) => ({
+      ...documentMetadata(document),
+      url: documentClickUrl(deal.id, document, origin),
+    })),
+  });
+}
 
 export async function POST(
   request: Request,
@@ -71,19 +97,23 @@ export async function POST(
             .join("\n")
             .slice(0, 20_000)
         : undefined;
-    documents.push({
-      id: id("doc"),
-      dealId,
-      name: file.name,
-      category: config.documentCategory,
-      stage: config.stage,
-      uploadedAt: new Date().toISOString(),
-      size: file.size,
-      textExcerpt,
-      extraction,
-    });
+    documents.push(
+      await storeUploadedDocument({
+        id: id("doc"),
+        dealId,
+        name: file.name,
+        category: config.documentCategory,
+        stage: config.stage,
+        uploadedAt: new Date().toISOString(),
+        size: file.size,
+        textExcerpt,
+        extraction,
+        buffer,
+      })
+    );
   }
 
+  const origin = new URL(request.url).origin;
   try {
     const attached = await updateStore((store) => {
       const deal = store.deals.find((candidate) => candidate.id === dealId);
@@ -113,22 +143,28 @@ export async function POST(
       const refreshed = await researchDeal(dealId, { force: true });
       return NextResponse.json(
         {
-          deal: refreshed,
-          documents,
+          deal: withClickableDocumentUrls(refreshed, origin),
+          documents: documents.map((document) => ({
+            ...documentMetadata(document),
+            url: documentClickUrl(dealId, document, origin),
+          })),
           matchedDeal: { id: refreshed.id, name: refreshed.name },
         },
         { status: 201 }
       );
     } catch (error) {
-      // The attachment is already durable. Report a refresh failure without
-      // pretending the document was lost or creating another deal.
       const current = (await readStore()).deals.find(
         (deal) => deal.id === dealId
       );
       return NextResponse.json(
         {
-          deal: current,
-          documents,
+          deal: current
+            ? withClickableDocumentUrls(current, origin)
+            : current,
+          documents: documents.map((document) => ({
+            ...documentMetadata(document),
+            url: documentClickUrl(dealId, document, origin),
+          })),
           matchedDeal: { id: attached.id, name: attached.name },
           screenRefreshError:
             error instanceof Error ? error.message : "Screen refresh failed.",

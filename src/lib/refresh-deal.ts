@@ -9,7 +9,7 @@ import {
   hasReadableCim,
   tightenStoredNotes,
 } from "./deal-picture";
-import { firstSentences } from "./copy";
+import { firstSentences, looksLikeOcrDump } from "./copy";
 import type { Deal } from "./types";
 
 const PRESERVE_STATUS = new Set([
@@ -48,17 +48,38 @@ export function refreshDealFromDocuments(
   }
 
   const picture = buildDealPicture(deal);
-  deal.dealPicture = picture;
+  deal.dealPicture = keepReadablePicture(deal.dealPicture, picture);
   if (deal.ownerQuestions) {
     deal.ownerQuestions.companyBrief = firstSentences(
-      picture.summary || deal.ownerQuestions.companyBrief || "",
+      deal.dealPicture.summary || deal.ownerQuestions.companyBrief || "",
       3
     );
   }
-  const nextNotes = tightenStoredNotes(deal, picture.summary);
+  const nextNotes = tightenStoredNotes(deal, deal.dealPicture.summary);
   if (nextNotes !== undefined) deal.notes = nextNotes;
   deal.updatedAt = new Date().toISOString();
   return snapshot(deal) !== before;
+}
+
+function keepReadablePicture(
+  stored: Deal["dealPicture"] | undefined,
+  built: NonNullable<Deal["dealPicture"]>
+): NonNullable<Deal["dealPicture"]> {
+  const storedOk =
+    Boolean(stored?.summary) && !looksLikeOcrDump(stored?.summary);
+  if (storedOk && stored) {
+    return {
+      ...stored,
+      score: built.score,
+      scoreLabel: built.scoreLabel,
+      closeSpeed: built.closeSpeed,
+      rebuiltAt: built.rebuiltAt,
+    };
+  }
+  if (looksLikeOcrDump(built.summary)) {
+    return { ...built, summary: "" };
+  }
+  return built;
 }
 
 export function ensureDealRefresh(deal: Deal): boolean {
