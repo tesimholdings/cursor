@@ -1,4 +1,8 @@
-import { persistableCimDriveUrl } from "./cim-drive";
+import {
+  attachKnownCimDriveUrl,
+  mergePublicResearch,
+  persistableCimDriveUrl,
+} from "./cim-drive";
 import type { Deal, PipelineStatus } from "./types";
 import { mergeDocumentMetadata } from "./documents";
 
@@ -31,8 +35,12 @@ export function applyDealPatch(
   if (body.ownerQuestions)
     deal.ownerQuestions = body.ownerQuestions as Deal["ownerQuestions"];
   if (body.screening) deal.screening = body.screening as Deal["screening"];
-  if (body.publicResearch)
-    deal.publicResearch = body.publicResearch as Deal["publicResearch"];
+  if (body.publicResearch) {
+    deal.publicResearch = mergePublicResearch(
+      deal.publicResearch,
+      body.publicResearch as NonNullable<Deal["publicResearch"]>
+    );
+  }
   if (body.cimDriveUrl !== undefined) {
     deal.cimDriveUrl = persistableCimDriveUrl(
       body.cimDriveUrl as Deal["cimDriveUrl"]
@@ -44,6 +52,7 @@ export function applyDealPatch(
       body.documents as Deal["documents"]
     );
   }
+  attachKnownCimDriveUrl(deal);
   deal.updatedAt = new Date().toISOString();
   return deal;
 }

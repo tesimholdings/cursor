@@ -200,6 +200,11 @@ export interface PublicResearch {
   reason?: string;
   companyWebsiteUrl?: string;
   sources: ResearchSource[];
+  /** Real Google Drive CIM. Live ACC stored these here because top-level PATCH was stripped. */
+  cimDriveUrl?: string;
+  cimDriveFileId?: string;
+  cimDriveName?: string;
+  cimDriveFolderUrl?: string;
 }
 
 export interface OwnerQuestion {

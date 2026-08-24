@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import {
   attachKnownCimDriveUrl,
   isDumpDocument,
-  isOpenableCimDocument,
   knownCimDriveFor,
   normalizeDriveViewUrl,
   openCimUrl,
@@ -57,8 +56,60 @@ describe("Open CIM Drive URL", () => {
     ).toBe("https://drive.google.com/file/d/1Bsmr0fTz2GmqwfCWTMRE-RjW3FfvbD_o/view");
   });
 
-  it("opens deal.cimDriveUrl first and PATCH persists it", () => {
+  it("opens publicResearch.cimDriveUrl for live Uniquecoat and lifts a first-class cimDriveUrl", () => {
     const card = deal({
+      id: "deal_61peacy76abh",
+      name: "Uniquecoat Technologies, LLC",
+      documents: [
+        doc({
+          id: "cim",
+          name: "UCT_CIM_6326.pdf",
+          category: "cim",
+          textExcerpt: "C O N F I D E N T I A L beige OCR dump",
+        }),
+        doc({ id: "tavily", name: "tavily-uniquecoat.pdf", category: "listing" }),
+        doc({
+          id: "ais",
+          name: "ais-tight-copy-deal_61peacy76abh.pdf",
+          category: "listing",
+        }),
+      ],
+      publicResearch: {
+        status: "complete",
+        provider: "tavily",
+        searchedAt: new Date().toISOString(),
+        sources: [],
+        cimDriveUrl:
+          "https://drive.google.com/file/d/1Bsmr0fTz2GmqwfCWTMRE-RjW3FfvbD_o/view",
+        cimDriveFileId: "1Bsmr0fTz2GmqwfCWTMRE-RjW3FfvbD_o",
+        cimDriveName: "UCT_CIM_6326.pdf",
+        cimDriveFolderUrl:
+          "https://drive.google.com/drive/folders/189SZoMdUK3NMgZvava05vSXh7yR_OaB4",
+      },
+    });
+    expect(card.cimDriveUrl).toBeUndefined();
+    expect(openCimUrl(card)).toBe(
+      "https://drive.google.com/file/d/1Bsmr0fTz2GmqwfCWTMRE-RjW3FfvbD_o/view"
+    );
+    expect(companyScan(card).openCimUrl).toBe(
+      "https://drive.google.com/file/d/1Bsmr0fTz2GmqwfCWTMRE-RjW3FfvbD_o/view"
+    );
+    expect(attachKnownCimDriveUrl(card)).toBe(true);
+    expect(card.cimDriveUrl).toBe(
+      "https://drive.google.com/file/d/1Bsmr0fTz2GmqwfCWTMRE-RjW3FfvbD_o/view"
+    );
+    expect(card.documents[0].url).toBeUndefined();
+  });
+
+  it("persists first-class cimDriveUrl on PATCH and mirrors it onto publicResearch", () => {
+    const card = deal({
+      name: "Lawrence Furniture",
+      publicResearch: {
+        status: "complete",
+        provider: "none",
+        searchedAt: new Date().toISOString(),
+        sources: [],
+      },
       documents: [
         doc({
           id: "extract",
@@ -75,11 +126,43 @@ describe("Open CIM Drive URL", () => {
     expect(card.cimDriveUrl).toBe(
       "https://drive.google.com/file/d/1Bsmr0fTz2GmqwfCWTMRE-RjW3FfvbD_o/view"
     );
+    expect(card.publicResearch?.cimDriveUrl).toBe(card.cimDriveUrl);
+    expect(card.publicResearch?.cimDriveFileId).toBe(
+      "1Bsmr0fTz2GmqwfCWTMRE-RjW3FfvbD_o"
+    );
     expect(openCimUrl(card)).toBe(card.cimDriveUrl);
-    expect(companyScan(card).openCimUrl).toBe(card.cimDriveUrl);
   });
 
-  it("falls back to a cim document with a real URL and skips dumps", () => {
+  it("keeps publicResearch CIM Drive fields when PATCH omits them", () => {
+    const card = deal({
+      name: "Lawrence Furniture",
+      publicResearch: {
+        status: "complete",
+        provider: "tavily",
+        searchedAt: "2026-08-21T00:00:00.000Z",
+        sources: [],
+        cimDriveUrl:
+          "https://drive.google.com/file/d/1Bsmr0fTz2GmqwfCWTMRE-RjW3FfvbD_o/view",
+        cimDriveFileId: "1Bsmr0fTz2GmqwfCWTMRE-RjW3FfvbD_o",
+        cimDriveName: "UCT_CIM_6326.pdf",
+      },
+    });
+    applyDealPatch(card, {
+      publicResearch: {
+        status: "complete",
+        provider: "direct_only",
+        searchedAt: new Date().toISOString(),
+        sources: [],
+      },
+    });
+    expect(card.publicResearch?.provider).toBe("direct_only");
+    expect(card.publicResearch?.cimDriveUrl).toBe(
+      "https://drive.google.com/file/d/1Bsmr0fTz2GmqwfCWTMRE-RjW3FfvbD_o/view"
+    );
+    expect(card.cimDriveUrl).toBe(card.publicResearch?.cimDriveUrl);
+  });
+
+  it("does not open tavily, AIS, extract, or OCR dumps as the CIM", () => {
     const card = deal({
       name: "Lawrence Furniture",
       documents: [
@@ -102,28 +185,24 @@ describe("Open CIM Drive URL", () => {
           url: "https://example.com/Mighty-Molding-CIM-extract.pdf",
         }),
         doc({
-          id: "cim",
+          id: "ocr",
           name: "Furniture-CIM.pdf",
           category: "cim",
-          url: "https://files.example.com/Furniture-CIM.pdf",
+          textExcerpt: "CONFIDENTIALINFORMATIONMEMORANDUM",
         }),
       ],
     });
     expect(isDumpDocument(card.documents[0])).toBe(true);
     expect(isDumpDocument(card.documents[1])).toBe(true);
     expect(isDumpDocument(card.documents[2])).toBe(true);
-    expect(isOpenableCimDocument(card.documents[3])).toBe(true);
-    expect(openCimUrl(card)).toBe("https://files.example.com/Furniture-CIM.pdf");
+    expect(openCimUrl(card)).toBeNull();
     const scan = companyScan(card);
-    expect(scan.openCimUrl).toBe("https://files.example.com/Furniture-CIM.pdf");
+    expect(scan.openCimUrl).toBeNull();
     expect(scan.dumpDocuments.map((item) => item.name)).toEqual([
       "tavily-lawrence.pdf",
       "ais-tight-copy-deal.pdf",
       "Mighty-Molding-CIM-extract.pdf",
     ]);
-    expect(scan.otherDocuments.some((item) => /tavily|ais-tight|extract/i.test(item.name))).toBe(
-      false
-    );
   });
 
   it("does not treat extracted-text-only CIMs as Open CIM", () => {
@@ -161,7 +240,7 @@ describe("Open CIM Drive URL", () => {
     expect(card.cimDriveUrl).toBe(
       "https://drive.google.com/file/d/1Bsmr0fTz2GmqwfCWTMRE-RjW3FfvbD_o/view"
     );
-    expect(card.documents[1].url).toBe(card.cimDriveUrl);
+    expect(card.documents[1].url).toBeUndefined();
     expect(openCimUrl(card)).toBe(card.cimDriveUrl);
   });
 

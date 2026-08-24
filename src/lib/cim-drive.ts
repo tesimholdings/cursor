@@ -78,6 +78,73 @@ export function persistableCimDriveUrl(url?: string | null) {
   return normalizeDriveViewUrl(trimmed) || trimmed;
 }
 
+const CIM_DRIVE_KEYS = [
+  "cimDriveUrl",
+  "cimDriveFileId",
+  "cimDriveName",
+  "cimDriveFolderUrl",
+] as const;
+
+export function isUsableCimHref(url?: string | null) {
+  const href = persistableCimDriveUrl(url);
+  if (!href) return null;
+  if (isDumpDocumentName(href)) return null;
+  if (normalizeDriveViewUrl(href) || isHttpUrl(href)) return href;
+  return null;
+}
+
+export function researchCimDriveUrl(deal: Pick<Deal, "cimDriveUrl" | "publicResearch">) {
+  const fromDeal = isUsableCimHref(deal.cimDriveUrl);
+  if (fromDeal) return fromDeal;
+  const research = deal.publicResearch;
+  const fromResearch = isUsableCimHref(research?.cimDriveUrl);
+  if (fromResearch) return fromResearch;
+  const fileId = (research?.cimDriveFileId || "").trim();
+  if (fileId && /^[a-zA-Z0-9_-]{10,}$/.test(fileId)) return driveViewUrl(fileId);
+  return null;
+}
+
+export function mergePublicResearch(
+  existing: Deal["publicResearch"] | undefined,
+  incoming: NonNullable<Deal["publicResearch"]>
+): NonNullable<Deal["publicResearch"]> {
+  const next = { ...incoming };
+  for (const key of CIM_DRIVE_KEYS) {
+    if (next[key] === undefined && existing?.[key] !== undefined) {
+      next[key] = existing[key];
+    }
+  }
+  const href = isUsableCimHref(next.cimDriveUrl);
+  if (href) next.cimDriveUrl = href;
+  const fileId = driveFileIdFromUrl(next.cimDriveUrl) || next.cimDriveFileId;
+  if (fileId) next.cimDriveFileId = fileId;
+  return next;
+}
+
+export function preserveCimDriveFields(
+  previous: Deal["publicResearch"] | undefined,
+  next: NonNullable<Deal["publicResearch"]>
+) {
+  return mergePublicResearch(previous, next);
+}
+
+export function mirrorCimDriveToPublicResearch(deal: Deal) {
+  const href = researchCimDriveUrl(deal);
+  if (!href || !deal.publicResearch) return false;
+  let changed = false;
+  if (deal.publicResearch.cimDriveUrl !== href) {
+    deal.publicResearch.cimDriveUrl = href;
+    changed = true;
+  }
+  const fileId =
+    driveFileIdFromUrl(href) || deal.publicResearch.cimDriveFileId;
+  if (fileId && deal.publicResearch.cimDriveFileId !== fileId) {
+    deal.publicResearch.cimDriveFileId = fileId;
+    changed = true;
+  }
+  return changed;
+}
+
 export function isHttpUrl(url?: string | null) {
   if (!url) return false;
   return /^(https?:)?\/\//i.test(url);
@@ -154,12 +221,8 @@ export function knownCimDriveFor(deal: Pick<Deal, "name" | "documents">) {
 }
 
 export function openCimUrl(deal: Deal) {
-  const fromDeal = persistableCimDriveUrl(deal.cimDriveUrl);
-  if (fromDeal && (normalizeDriveViewUrl(fromDeal) || isHttpUrl(fromDeal))) {
-    if (!isDumpDocumentName(fromDeal)) return fromDeal;
-  }
-  const fallback = deal.documents.find(isOpenableCimDocument);
-  if (fallback) return storedDocumentUrl(fallback) || null;
+  const stored = researchCimDriveUrl(deal);
+  if (stored) return stored;
   const known = knownCimDriveFor(deal);
   return known ? driveViewUrl(known.fileId) : null;
 }
@@ -167,27 +230,17 @@ export function openCimUrl(deal: Deal) {
 export function attachKnownCimDriveUrl(deal: Deal) {
   let changed = false;
   const known = knownCimDriveFor(deal);
-  const normalizedStored = persistableCimDriveUrl(deal.cimDriveUrl);
-  if (normalizedStored && normalizedStored !== deal.cimDriveUrl) {
-    deal.cimDriveUrl = normalizedStored;
+  const href = openCimUrl(deal) || (known ? driveViewUrl(known.fileId) : null);
+  if (href && normalizeDriveViewUrl(href) && deal.cimDriveUrl !== href) {
+    deal.cimDriveUrl = href;
     changed = true;
   }
-  if (!persistableCimDriveUrl(deal.cimDriveUrl) && known) {
-    deal.cimDriveUrl = driveViewUrl(known.fileId);
-    changed = true;
-  }
-  const href = openCimUrl(deal);
-  if (href && normalizeDriveViewUrl(href)) {
-    const cimDoc = deal.documents.find(
-      (document) =>
-        document.category === "cim" &&
-        !isDumpDocument(document) &&
-        !storedDocumentUrl(document)
-    );
-    if (cimDoc) {
-      cimDoc.url = href;
+  if (href && known && deal.publicResearch) {
+    if (!deal.publicResearch.cimDriveName) {
+      deal.publicResearch.cimDriveName = known.fileName;
       changed = true;
     }
   }
+  if (mirrorCimDriveToPublicResearch(deal)) changed = true;
   return changed;
 }

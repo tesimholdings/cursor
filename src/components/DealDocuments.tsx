@@ -1,6 +1,10 @@
 import type { Deal, DocumentRecord } from "@/lib/types";
 import { companyScan } from "@/lib/company-scan";
-import { isDumpDocument, storedDocumentUrl } from "@/lib/cim-drive";
+import {
+  foldName,
+  isDumpDocument,
+  storedDocumentUrl,
+} from "@/lib/cim-drive";
 import { documentClickUrl } from "@/lib/documents";
 
 export function DealDocuments({
@@ -33,7 +37,12 @@ export function DealDocuments({
       {scan.otherDocuments.length > 0 && (
         <ul className="mt-4 space-y-2 text-sm">
           {scan.otherDocuments.map((document) => (
-            <SecondaryFile key={document.id} dealId={deal.id} document={document} />
+            <SecondaryFile
+              key={document.id}
+              deal={deal}
+              cimHref={cimHref}
+              document={document}
+            />
           ))}
         </ul>
       )}
@@ -78,14 +87,23 @@ export function DealDocuments({
 }
 
 function SecondaryFile({
-  dealId,
+  deal,
+  cimHref,
   document,
 }: {
-  dealId: string;
+  deal: Deal;
+  cimHref: string | null;
   document: DocumentRecord;
 }) {
-  const href =
-    storedDocumentUrl(document) || documentClickUrl(dealId, document);
+  const namedCim =
+    Boolean(cimHref) &&
+    deal.publicResearch?.cimDriveName &&
+    foldName(document.name) === foldName(deal.publicResearch.cimDriveName);
+  const href = isDumpDocument(document)
+    ? undefined
+    : namedCim
+      ? cimHref
+      : storedDocumentUrl(document) || documentClickUrl(deal.id, document);
   const kind =
     document.category === "financials"
       ? "Financials"
@@ -94,7 +112,7 @@ function SecondaryFile({
         : document.category.replace(/_/g, " ");
   return (
     <li>
-      {href && !isDumpDocument(document) ? (
+      {href ? (
         <a href={href} target="_blank" rel="noreferrer" className="underline">
           {document.name}
         </a>

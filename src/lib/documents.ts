@@ -1,5 +1,6 @@
 import {
   isDumpDocument,
+  openCimUrl,
   persistableCimDriveUrl,
   storedDocumentUrl,
 } from "./cim-drive";
@@ -72,8 +73,10 @@ export function documentClickUrl(
 }
 
 export function withClickableDocumentUrls(deal: Deal, origin?: string): Deal {
+  const href = openCimUrl(deal);
   return {
     ...deal,
+    ...(href ? { cimDriveUrl: href } : {}),
     documents: deal.documents.map((document) => {
       const url = documentClickUrl(deal.id, document, origin);
       return {
