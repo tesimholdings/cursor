@@ -5,6 +5,20 @@ export function escapeRegExp(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+export function legalNameStems(name?: string | null) {
+  const full = (name || "").replace(/\s+/g, " ").trim();
+  if (!full) return [];
+  const stems = [full];
+  const withoutEntity = full
+    .replace(
+      /,?\s*(llc|l\.l\.c\.|inc|incorporated|co\.|company|ltd|lp|llp|corp|corporation)\.?$/i,
+      ""
+    )
+    .trim();
+  if (withoutEntity && withoutEntity !== full) stems.push(withoutEntity);
+  return [...new Set(stems.filter((stem) => stem.length > 3))];
+}
+
 export function stripLeadingName(text: string, name?: string | null) {
   if (!text) return "";
   let next = text.replace(/\s+/g, " ").trim();
@@ -19,6 +33,22 @@ export function stripLeadingName(text: string, name?: string | null) {
   );
   next = next.replace(/^\s*[—–:,-]\s*/, "").trim();
   if (!next) return text.replace(/\s+/g, " ").trim();
+  return next.replace(/^[a-z]/, (char) => char.toUpperCase());
+}
+
+/** Remove the legal name anywhere after the page has already shown it once. */
+export function stripRepeatedName(text: string, name?: string | null) {
+  if (!text) return "";
+  let next = stripLeadingName(text, name);
+  for (const stem of legalNameStems(name)) {
+    next = next
+      .replace(new RegExp(`\\b${escapeRegExp(stem)}(?:'s)?\\b`, "gi"), "")
+      .replace(/\s{2,}/g, " ")
+      .replace(/\s+([,.;:])/g, "$1")
+      .replace(/^[—–:,-]\s*/, "")
+      .trim();
+  }
+  if (!next) return "";
   return next.replace(/^[a-z]/, (char) => char.toUpperCase());
 }
 

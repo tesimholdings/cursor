@@ -76,7 +76,8 @@ export type DealPictureKind =
   | "CIM_FACT"
   | "SELLER_CLAIM"
   | "UNANSWERED"
-  | "PUBLIC";
+  | "PUBLIC"
+  | "AIS_CALL";
 
 export interface DealPictureFact {
   label: string;
@@ -87,7 +88,7 @@ export interface DealPictureFact {
 
 export interface DealPicture {
   version: number;
-  status: DealPictureStatus;
+  status: DealPictureStatus | "ais_tight" | "listing_teaser";
   summary: string;
   ugly?: string;
   facts: DealPictureFact[];
@@ -97,6 +98,8 @@ export interface DealPicture {
   scoreLabel: "Board score" | "IC score";
   score: number;
   closeSpeed: CloseSpeed;
+  /** Stored AIS/IC sentence with call + max/walk. Never invent this. */
+  call?: string;
 }
 
 export interface BoardSubScore {
@@ -447,6 +450,11 @@ export interface DocumentRecord {
   size: number;
   textExcerpt?: string;
   extraction?: DocumentExtraction;
+  /** Clickable URL (blob/public or /api/deals/:id/documents/:docId). */
+  url?: string;
+  blobPathname?: string;
+  blobUrl?: string;
+  contentType?: string;
 }
 
 export interface DocumentEvidenceChunk {

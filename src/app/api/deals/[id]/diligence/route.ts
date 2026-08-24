@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { updateStore } from "@/lib/store";
 import { attachModels, runDiligence } from "@/lib/diligence";
 import { id } from "@/lib/format";
+import { storeUploadedDocument } from "@/lib/document-files";
 import {
   classifyDocument,
   extractDocument,
@@ -24,16 +25,19 @@ export async function POST(
       if (!(file instanceof File)) continue;
       const buffer = Buffer.from(await file.arrayBuffer());
       const extraction = await extractDocument(file.name, buffer, file.type);
-      uploadedDocuments.push({
-        id: id("doc"),
-        dealId,
-        name: file.name,
-        category: classifyDocument(file.name, extraction),
-        stage: 3,
-        uploadedAt: new Date().toISOString(),
-        size: file.size,
-        extraction,
-      });
+      uploadedDocuments.push(
+        await storeUploadedDocument({
+          id: id("doc"),
+          dealId,
+          name: file.name,
+          category: classifyDocument(file.name, extraction),
+          stage: 3,
+          uploadedAt: new Date().toISOString(),
+          size: file.size,
+          extraction,
+          buffer,
+        })
+      );
     }
   }
   const result = await updateStore((store) => {
