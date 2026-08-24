@@ -1,3 +1,4 @@
+import { openCimUrl } from "./cim-drive";
 import { headlineScore } from "./board-scoring";
 import { closeSpeedFor } from "./close-speed";
 import {
@@ -7,7 +8,7 @@ import {
   stripRepeatedName,
 } from "./copy";
 import { buildDealPicture, visibleDealPictureFacts } from "./deal-picture";
-import { primaryCimDocument, secondaryDocuments } from "./documents";
+import { dumpDocuments, listedDocuments, primaryCimDocument } from "./documents";
 import { money } from "./format";
 import {
   dealFunnelStep,
@@ -208,7 +209,9 @@ export interface CompanyScan {
   ugly: string;
   callLine: string;
   primaryCim: DocumentRecord | null;
+  openCimUrl: string | null;
   otherDocuments: DocumentRecord[];
+  dumpDocuments: DocumentRecord[];
   funnelStep: FunnelStepNumber;
   funnelSteps: typeof FUNNEL_STEPS;
   nextAction: string;
@@ -218,6 +221,7 @@ export function companyScan(deal: Deal): CompanyScan {
   const picture = deal.dealPicture || buildDealPicture(deal);
   const headline = headlineScore(deal);
   const primaryCim = primaryCimDocument(deal);
+  const href = openCimUrl(deal);
   return {
     name: deal.name,
     score: headline.score,
@@ -230,7 +234,9 @@ export function companyScan(deal: Deal): CompanyScan {
     ugly: scanUgly(deal, picture),
     callLine: maxWalkLine(deal, picture) || scanCall(deal),
     primaryCim,
-    otherDocuments: secondaryDocuments(deal, primaryCim),
+    openCimUrl: href,
+    otherDocuments: listedDocuments(deal, primaryCim),
+    dumpDocuments: dumpDocuments(deal),
     funnelStep: dealFunnelStep(deal),
     funnelSteps: FUNNEL_STEPS,
     nextAction: scanNextAction(deal),

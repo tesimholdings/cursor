@@ -1,5 +1,6 @@
 import type { Deal, DocumentRecord } from "@/lib/types";
 import { companyScan } from "@/lib/company-scan";
+import { isDumpDocument, storedDocumentUrl } from "@/lib/cim-drive";
 import { documentClickUrl } from "@/lib/documents";
 
 export function DealDocuments({
@@ -10,12 +11,11 @@ export function DealDocuments({
   onUpload: (url: string, form: HTMLFormElement) => void;
 }) {
   const scan = companyScan(deal);
-  const cim = scan.primaryCim;
-  const cimHref = cim ? documentClickUrl(deal.id, cim) : "";
+  const cimHref = scan.openCimUrl;
   return (
     <section className="card rounded-2xl p-5">
       <div className="kicker">Documents</div>
-      {cim ? (
+      {cimHref ? (
         <a
           className="btn btn-primary btn-xl mt-3"
           href={cimHref}
@@ -36,6 +36,16 @@ export function DealDocuments({
             <SecondaryFile key={document.id} dealId={deal.id} document={document} />
           ))}
         </ul>
+      )}
+      {scan.dumpDocuments.length > 0 && (
+        <details className="mt-3 text-xs text-[var(--muted)]">
+          <summary className="cursor-pointer">Research dumps (not the CIM)</summary>
+          <ul className="mt-2 space-y-1">
+            {scan.dumpDocuments.map((document) => (
+              <li key={document.id}>{document.name}</li>
+            ))}
+          </ul>
+        </details>
       )}
       <form
         className="mt-4 flex flex-wrap items-center gap-2 text-sm"
@@ -74,7 +84,8 @@ function SecondaryFile({
   dealId: string;
   document: DocumentRecord;
 }) {
-  const href = documentClickUrl(dealId, document);
+  const href =
+    storedDocumentUrl(document) || documentClickUrl(dealId, document);
   const kind =
     document.category === "financials"
       ? "Financials"
@@ -83,9 +94,13 @@ function SecondaryFile({
         : document.category.replace(/_/g, " ");
   return (
     <li>
-      <a href={href} target="_blank" rel="noreferrer" className="underline">
-        {document.name}
-      </a>
+      {href && !isDumpDocument(document) ? (
+        <a href={href} target="_blank" rel="noreferrer" className="underline">
+          {document.name}
+        </a>
+      ) : (
+        <span>{document.name}</span>
+      )}
       <span className="ml-2 text-[var(--muted)]">{kind}</span>
     </li>
   );

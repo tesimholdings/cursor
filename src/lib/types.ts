@@ -511,6 +511,8 @@ export interface Deal {
   name: string;
   listingUrl?: string;
   websiteUrl?: string;
+  /** Google Drive view URL for the real CIM PDF. Open CIM uses this first. */
+  cimDriveUrl?: string;
   industry: string;
   businessCategory?: BusinessCategory;
   operatingStyleTags?: OperatingStyle[];

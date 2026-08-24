@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { storedDocumentUrl } from "@/lib/cim-drive";
 import { extractDocument } from "@/lib/document-extraction";
 import { storeUploadedDocument } from "@/lib/document-files";
 import {
@@ -40,10 +41,15 @@ export async function GET(
   }
   const origin = new URL(request.url).origin;
   return NextResponse.json({
-    documents: deal.documents.map((document) => ({
-      ...documentMetadata(document),
-      url: documentClickUrl(deal.id, document, origin),
-    })),
+    documents: deal.documents.map((document) => {
+      const url =
+        storedDocumentUrl(document) ||
+        documentClickUrl(deal.id, document, origin);
+      return {
+        ...documentMetadata(document),
+        ...(url ? { url } : {}),
+      };
+    }),
   });
 }
 
