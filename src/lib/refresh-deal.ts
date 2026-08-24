@@ -1,3 +1,4 @@
+import { attachKnownCimDriveUrl } from "./cim-drive";
 import { analyzePacket, applyPacketAssignments } from "./packet";
 import { buildOwnerQuestions } from "./owner-questions";
 import { buildStage1 } from "./screening";
@@ -83,6 +84,7 @@ function keepReadablePicture(
 }
 
 export function ensureDealRefresh(deal: Deal): boolean {
+  const linked = attachKnownCimDriveUrl(deal);
   const stale =
     deal.dealPicture?.version !== DEAL_PICTURE_VERSION ||
     (hasReadableCim(deal) && !deal.packet) ||
@@ -91,8 +93,8 @@ export function ensureDealRefresh(deal: Deal): boolean {
         deal.status
       ) &&
       deal.status !== "passed");
-  if (!stale && deal.dealPicture) return false;
-  return refreshDealFromDocuments(deal);
+  if (!stale && deal.dealPicture) return linked;
+  return refreshDealFromDocuments(deal) || linked;
 }
 
 export function ensureStoreDealRefresh(deals: Deal[]): boolean {

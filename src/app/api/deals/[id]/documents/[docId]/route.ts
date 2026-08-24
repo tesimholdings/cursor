@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
+import { normalizeDriveViewUrl, storedDocumentUrl } from "@/lib/cim-drive";
 import { readDocumentBytes } from "@/lib/document-files";
-import { documentViewerHtml } from "@/lib/documents";
 import { readStore } from "@/lib/store";
 
 export const dynamic = "force-dynamic";
@@ -15,6 +15,11 @@ export async function GET(
   const document = deal?.documents.find((item) => item.id === docId);
   if (!deal || !document) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  const drive = normalizeDriveViewUrl(storedDocumentUrl(document));
+  if (drive) {
+    return NextResponse.redirect(drive, 302);
   }
 
   const stored = await readDocumentBytes({
@@ -34,20 +39,8 @@ export async function GET(
     });
   }
 
-  if (
-    document.textExcerpt?.trim() ||
-    document.extraction?.chunks?.some((chunk) => chunk.text?.trim())
-  ) {
-    return new NextResponse(documentViewerHtml(document), {
-      headers: {
-        "Content-Type": "text/html; charset=utf-8",
-        "Cache-Control": "private, max-age=30",
-      },
-    });
-  }
-
   return NextResponse.json(
-    { error: "No file bytes are stored for this document." },
+    { error: "No file is stored for this document. Open the Drive CIM instead." },
     { status: 404 }
   );
 }

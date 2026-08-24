@@ -96,15 +96,31 @@ describe("company scan CIM and documents", () => {
     expect(documentClickUrl("deal_scan", document, "https://app.example")).toBe(
       "https://blob.vercel-storage.com/uct.pdf"
     );
-    const local = doc({ id: "cim2", name: "book.pdf", category: "cim" });
-    expect(documentClickUrl("deal_scan", local, "https://app.example")).toBe(
-      "https://app.example/api/deals/deal_scan/documents/cim2"
+    const drive = doc({
+      id: "cim3",
+      name: "book.pdf",
+      category: "cim",
+      url: "https://drive.google.com/file/d/1Bsmr0fTz2GmqwfCWTMRE-RjW3FfvbD_o/view?usp=drivesdk",
+    });
+    expect(documentClickUrl("deal_scan", drive, "https://app.example")).toBe(
+      "https://drive.google.com/file/d/1Bsmr0fTz2GmqwfCWTMRE-RjW3FfvbD_o/view"
     );
+    const local = doc({ id: "cim2", name: "book.pdf", category: "cim" });
+    expect(documentClickUrl("deal_scan", local, "https://app.example")).toBeUndefined();
     const hydrated = withClickableDocumentUrls(
       deal({ documents: [local] }),
       "https://app.example"
     );
-    expect(hydrated.documents[0].url).toMatch(/\/api\/deals\/deal_scan\/documents\/cim2$/);
+    expect(hydrated.documents[0].url).toBeUndefined();
+    const stored = doc({
+      id: "cim4",
+      name: "book.pdf",
+      category: "cim",
+      blobPathname: "acquisition-command-center/documents/deal_scan/cim4/book.pdf",
+    });
+    expect(documentClickUrl("deal_scan", stored, "https://app.example")).toBe(
+      "https://app.example/api/deals/deal_scan/documents/cim4"
+    );
   });
 });
 
@@ -306,5 +322,12 @@ describe("deal PATCH documents metadata", () => {
     expect(card.dealPicture?.summary).toMatch(/HVAF/);
     expect(card.documents[0].name).toBe("UCT_CIM_6326.pdf");
     expect(card.documents[0].url).toBe("https://blob.vercel-storage.com/uct.pdf");
+    applyDealPatch(card, {
+      cimDriveUrl:
+        "https://drive.google.com/file/d/1Bsmr0fTz2GmqwfCWTMRE-RjW3FfvbD_o/view?usp=drivesdk",
+    });
+    expect(card.cimDriveUrl).toBe(
+      "https://drive.google.com/file/d/1Bsmr0fTz2GmqwfCWTMRE-RjW3FfvbD_o/view"
+    );
   });
 });

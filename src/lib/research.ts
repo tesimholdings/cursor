@@ -2,6 +2,7 @@ import { updateStore } from "./store";
 import { buildStage1 } from "./screening";
 import { enrichOwnerQuestions } from "./ai";
 import { buildOwnerQuestions } from "./owner-questions";
+import { preserveCimDriveFields } from "./cim-drive";
 import { researchCompany } from "./public-research";
 import { refreshDealFromDocuments } from "./refresh-deal";
 import { firstSentences } from "./copy";
@@ -36,7 +37,10 @@ export async function researchNext(limit = 3) {
       try {
         // Mandatory ordering: Step 1A is persisted before Step 1B is created.
         refreshDealFromDocuments(deal);
-        deal.publicResearch = await researchCompany(deal);
+        deal.publicResearch = preserveCimDriveFields(
+          deal.publicResearch,
+          await researchCompany(deal)
+        );
         deal.ownerQuestions = await enrichOwnerQuestions(
           deal,
           deal.ownerQuestions || buildOwnerQuestions(deal),
@@ -88,7 +92,10 @@ export async function researchDeal(id: string, options: { force?: boolean } = {}
     deal.researchStatus = "running";
     if (!ADVANCED.has(priorStatus)) deal.status = "screening";
     refreshDealFromDocuments(deal);
-    deal.publicResearch = await researchCompany(deal);
+    deal.publicResearch = preserveCimDriveFields(
+      deal.publicResearch,
+      await researchCompany(deal)
+    );
     deal.ownerQuestions = await enrichOwnerQuestions(
       deal,
       deal.ownerQuestions || buildOwnerQuestions(deal),
