@@ -451,7 +451,12 @@ export function sortDealsByHeadline(deals: Deal[], sort: HeadlineSort): Deal[] {
 
 export type PriceSort = "high" | "low";
 export type PriceBand = "all" | "under5" | "box" | "over10";
-export type BoardSort = HeadlineSort | "price-high" | "price-low";
+export type BoardSort =
+  | HeadlineSort
+  | "price-high"
+  | "price-low"
+  | "recent"
+  | "category";
 
 export function askingPriceValue(deal: Deal): number | null {
   const ask = deal.askingPrice;
@@ -510,8 +515,53 @@ export function sortDealsByPrice(deals: Deal[], sort: PriceSort): Deal[] {
   return [...deals].sort((a, b) => compareDealsByPrice(a, b, sort));
 }
 
+/** When the deal was added. Missing or unparseable dates sort last. */
+export function dealCreatedAtMs(deal: Pick<Deal, "createdAt">): number | null {
+  const raw = deal.createdAt?.trim();
+  if (!raw) return null;
+  const ms = Date.parse(raw);
+  return Number.isFinite(ms) ? ms : null;
+}
+
+export function compareDealsByRecent(a: Deal, b: Deal): number {
+  const aMs = dealCreatedAtMs(a);
+  const bMs = dealCreatedAtMs(b);
+  const aMissing = aMs == null;
+  const bMissing = bMs == null;
+  if (aMissing !== bMissing) return aMissing ? 1 : -1;
+  if (!aMissing && !bMissing && aMs !== bMs) return bMs - aMs;
+  return a.name.localeCompare(b.name);
+}
+
+export function sortDealsByRecent(deals: Deal[]): Deal[] {
+  return [...deals].sort(compareDealsByRecent);
+}
+
+/** Stored business category, otherwise the existing industry classification. */
+export function dealBoardCategory(deal: Deal): string {
+  const stored = deal.businessCategory?.trim();
+  if (stored) return stored;
+  return classifyDeal(deal).businessCategory || "Unknown";
+}
+
+export function compareDealsByCategory(a: Deal, b: Deal): number {
+  const aCat = dealBoardCategory(a);
+  const bCat = dealBoardCategory(b);
+  const aLast = !aCat || aCat === "Unknown";
+  const bLast = !bCat || bCat === "Unknown";
+  if (aLast !== bLast) return aLast ? 1 : -1;
+  if (!aLast && aCat !== bCat) return aCat.localeCompare(bCat);
+  return a.name.localeCompare(b.name);
+}
+
+export function sortDealsByCategory(deals: Deal[]): Deal[] {
+  return [...deals].sort(compareDealsByCategory);
+}
+
 export function sortBrokerBoard(deals: Deal[], sort: BoardSort): Deal[] {
   if (sort === "price-high") return sortDealsByPrice(deals, "high");
   if (sort === "price-low") return sortDealsByPrice(deals, "low");
+  if (sort === "recent") return sortDealsByRecent(deals);
+  if (sort === "category") return sortDealsByCategory(deals);
   return sortDealsByHeadline(deals, sort);
 }

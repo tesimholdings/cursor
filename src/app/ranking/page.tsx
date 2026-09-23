@@ -22,6 +22,7 @@ import { ScoreLegend } from "@/components/ScoreLegend";
 import {
   BOARD_SCORE_METRICS,
   boardScoreValue,
+  dealBoardCategory,
   dealInAskRange,
   dealInPriceBand,
   parseAskMillions,
@@ -181,11 +182,11 @@ export default function RankingPage() {
           <div className="kicker">Stefan’s broker screen</div>
           <h1 className="serif text-4xl">Which listings deserve an NDA?</h1>
           <p className="mt-2 text-[var(--muted)]">
-            Sort by the same headline already on the card — weighted IC score
-            when a Full IC exists, otherwise the purchase-value Board score —
-            or by asking price. Each card is four lines: what it does, cash,
-            the ugly, and the call plus score. Fast / Mid / Slow is close
-            speed, not a quality rank.
+            Sort by the headline on the card — weighted IC score when a Full
+            IC exists, otherwise the purchase-value Board score — by asking
+            price, by date added, or by business category. Each card is four
+            lines: what it does, cash, the ugly, and the call plus score.
+            Fast / Mid / Slow is close speed, not a quality rank.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
@@ -241,6 +242,50 @@ export default function RankingPage() {
               </button>
             ))}
           </div>
+          <div
+            className="inline-flex rounded-full border border-[var(--line)] bg-white p-1"
+            role="group"
+            aria-label="Sort deals by date added or category"
+          >
+            {(
+              [
+                ["recent", "Newest"],
+                ["category", "By category"],
+              ] as const
+            ).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                className={`rounded-full px-4 py-2 text-sm font-semibold ${
+                  boardSort === value
+                    ? "bg-[var(--navy)] text-[#f7f1e4]"
+                    : "text-[var(--ink)]"
+                }`}
+                aria-pressed={boardSort === value}
+                onClick={() => setBoardSort(value)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <label className="flex items-center gap-2 text-sm font-semibold">
+            Category
+            <select
+              aria-label="Business category"
+              className="rounded-lg border border-[var(--line)] bg-white px-2 py-2 font-normal"
+              value={filters.category}
+              onChange={(event) =>
+                setFilters({ ...filters, category: event.target.value })
+              }
+            >
+              <option value="all">All categories</option>
+              {BUSINESS_CATEGORIES.map((category) => (
+                <option key={category} value={category}>
+                  {category}
+                </option>
+              ))}
+            </select>
+          </label>
           {researching && (
             <span className="text-sm text-[var(--muted)]">
               Screening imported rows…
@@ -401,6 +446,7 @@ export default function RankingPage() {
           <option value="PASS">Pass</option>
         </select>
         <select
+          aria-label="Business category filter"
           className="rounded-lg border border-[var(--line)] bg-white px-2 py-1"
           value={filters.category}
           onChange={(event) =>
@@ -482,9 +528,14 @@ export default function RankingPage() {
             ? "worst first by headline"
             : boardSort === "price-high"
               ? "ask high to low"
-              : "ask low to high"}
+              : boardSort === "price-low"
+                ? "ask low to high"
+                : boardSort === "recent"
+                  ? "newest first by date added"
+                  : "grouped by business category"}
         . Search and filters apply first. Deals with no ask sit last on Price
-        sort.
+        sort. Deals with no added date sit last on Newest. Unknown categories
+        sit last on By category.
       </p>
 
       <div className="grid gap-3 md:grid-cols-2" hidden={Boolean(failure)}>
@@ -496,7 +547,14 @@ export default function RankingPage() {
           </p>
         )}
         {ranked.map((deal, index) => (
-          <DealCard key={deal.id} deal={deal} rank={index + 1} />
+          <DealCard
+            key={deal.id}
+            deal={deal}
+            rank={index + 1}
+            category={
+              boardSort === "category" ? dealBoardCategory(deal) : undefined
+            }
+          />
         ))}
       </div>
     </div>

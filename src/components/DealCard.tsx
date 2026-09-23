@@ -8,15 +8,25 @@ const CLOSE_TONE = {
   Slow: "bg-rose-100 text-rose-950",
 } as const;
 
-export function DealCard({ deal, rank }: { deal: Deal; rank?: number }) {
+export function DealCard({
+  deal,
+  rank,
+  category,
+}: {
+  deal: Deal;
+  rank?: number;
+  category?: string;
+}) {
   const lines = boardCardLines(deal);
   return (
     <article className="card rounded-2xl p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          {rank != null && (
+          {(rank != null || category) && (
             <div className="text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
-              {rank}
+              {rank != null ? rank : ""}
+              {rank != null && category ? " · " : ""}
+              {category || ""}
             </div>
           )}
           <Link
