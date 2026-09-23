@@ -65,8 +65,21 @@ npx vercel@latest deploy
 ```
 
 On the first run it prompts you to log in (GitHub is fine) and to confirm the
-project. It then prints the public preview URL. Add `--prod` instead if you want
-a stable URL that does not change on every deploy.
+project. It then prints the public preview URL.
+
+The live board is `https://acquisition-command-center-delta.vercel.app`.
+`vercel.json` pins the Next.js preset (`framework: nextjs`) and `next build`.
+A production alias that still points at a deployment from before that preset
+returns Vercel’s platform 404 (`NOT_FOUND`, not an app page). After this
+branch has a READY deployment, promote it so the alias serves the app:
+
+```bash
+npx vercel@latest promote <deployment-url> --yes --scope tesim-holdings
+```
+
+Merging to `main` is the durable path: production tracks `main`, and `main`
+without this app is only a README. Do not promote a README-only `main`
+deployment over a working board.
 
 To get preview URLs automatically on every push, add three repository secrets
 under **Settings → Secrets and variables → Actions**: `VERCEL_TOKEN`,

@@ -1,15 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import type { Deal } from "@/lib/types";
-import { money, multiple } from "@/lib/format";
+import { DealCard } from "@/components/DealCard";
 import {
   brokerCall,
   brokerScreen,
   dealFunnelStep,
   FUNNEL_STEPS,
-  type BrokerCall,
 } from "@/lib/pipeline";
 import {
   BUSINESS_CATEGORIES,
@@ -20,13 +18,10 @@ import {
   isHiddenSample,
 } from "@/lib/classification";
 import { closeSpeedFor } from "@/lib/close-speed";
-import { DealScanPills } from "@/components/DealScanPills";
-import { BoardScoreStrip } from "@/components/BoardScores";
 import { ScoreLegend } from "@/components/ScoreLegend";
 import {
   BOARD_SCORE_METRICS,
   boardScoreValue,
-  headlineScore,
   dealInAskRange,
   dealInPriceBand,
   parseAskMillions,
@@ -188,8 +183,9 @@ export default function RankingPage() {
           <p className="mt-2 text-[var(--muted)]">
             Sort by the same headline already on the card — weighted IC score
             when a Full IC exists, otherwise the purchase-value Board score —
-            then scan Good / Bad / Interesting before spending time with the
-            broker. Fast / Mid / Slow is close speed, not a quality rank.
+            or by asking price. Each card is four lines: what it does, cash,
+            the ugly, and the call plus score. Fast / Mid / Slow is close
+            speed, not a quality rank.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
@@ -491,155 +487,18 @@ export default function RankingPage() {
         sort.
       </p>
 
-      <div
-        className="card overflow-x-auto rounded-2xl"
-        hidden={Boolean(failure)}
-      >
-        <table className="w-full min-w-[1450px] text-left text-sm">
-          <thead className="border-b border-[var(--line)] text-xs uppercase tracking-wide text-[var(--muted)]">
-            <tr>
-              {[
-                "Rank",
-                "Company",
-                "Step",
-                "Score",
-                "Good",
-                "Bad",
-                "Interesting",
-                "Broker call",
-                "Ask",
-                "Revenue",
-                "SDE / EBITDA",
-                "Multiple",
-              ].map((heading) => (
-                <th key={heading} className="px-3 py-3 font-medium">
-                  {heading}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {ranked.length === 0 && (
-              <tr>
-                <td
-                  colSpan={12}
-                  className="px-6 py-12 text-center text-[var(--muted)]"
-                >
-                  {query.trim()
-                    ? `No companies match ‘${query.trim()}’.`
-                    : "No companies match the current filters."}
-                </td>
-              </tr>
-            )}
-            {ranked.map((deal, index) => {
-              const earnings = deal.sde || deal.ebitda;
-              const askingMultiple = multiple(deal.askingPrice, earnings);
-              const screen = brokerScreen(deal);
-              const headline = headlineScore(deal);
-              const rank = headline.score;
-              const step = FUNNEL_STEPS.find(
-                (item) => item.key === screen.step
-              );
-              return (
-                <tr
-                  key={deal.id}
-                  className="border-b border-[var(--line)] align-top last:border-0"
-                >
-                  <td className="px-3 py-4">{index + 1}</td>
-                  <td className="px-3 py-4">
-                    <Link
-                      className="font-semibold underline-offset-2 hover:underline"
-                      href={`/deals/${deal.id}`}
-                    >
-                      {deal.name}
-                    </Link>
-                    <div className="text-xs text-[var(--muted)]">
-                      {deal.industry} · {deal.location}
-                    </div>
-                    <DealScanPills deal={deal} className="mt-2 max-w-64" />
-                  </td>
-                  <td className="px-3 py-4">
-                    <span className="font-semibold">{step?.key}</span>
-                    <div className="max-w-28 text-xs text-[var(--muted)]">
-                      {step?.shortLabel}
-                    </div>
-                  </td>
-                  <td className="px-3 py-4">
-                    <span className="serif text-2xl">
-                      {Number.isFinite(rank) ? rank : "—"}
-                    </span>
-                    <span className="text-xs text-[var(--muted)]"> / 100</span>
-                    <div className="text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">
-                      {headline.label}
-                    </div>
-                    {headline.label === "IC score" && (
-                      <div className="text-[10px] text-[var(--muted)]">
-                        Average {headline.boardAverage}
-                      </div>
-                    )}
-                    <BoardScoreStrip
-                      deal={deal}
-                      className="mt-2 max-w-52"
-                    />
-                  </td>
-                  <ScreenBullet tone="good" text={screen.good} />
-                  <ScreenBullet tone="bad" text={screen.bad} />
-                  <ScreenBullet tone="interesting" text={screen.interesting} />
-                  <td className="px-3 py-4">
-                    <BrokerBadge call={screen.call} />
-                  </td>
-                  <td className="px-3 py-4">{money(deal.askingPrice)}</td>
-                  <td className="px-3 py-4">{money(deal.revenue)}</td>
-                  <td className="px-3 py-4">{money(earnings)}</td>
-                  <td className="px-3 py-4">
-                    {askingMultiple ? `${askingMultiple.toFixed(1)}x` : "—"}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+      <div className="grid gap-3 md:grid-cols-2" hidden={Boolean(failure)}>
+        {ranked.length === 0 && (
+          <p className="text-sm text-[var(--muted)] md:col-span-2">
+            {query.trim()
+              ? `No companies match ‘${query.trim()}’.`
+              : "No companies match the current filters."}
+          </p>
+        )}
+        {ranked.map((deal, index) => (
+          <DealCard key={deal.id} deal={deal} rank={index + 1} />
+        ))}
       </div>
     </div>
-  );
-}
-
-function ScreenBullet({
-  tone,
-  text,
-}: {
-  tone: "good" | "bad" | "interesting";
-  text: string[];
-}) {
-  const styles = {
-    good: "bg-emerald-100 text-emerald-900",
-    bad: "bg-amber-100 text-amber-950",
-    interesting: "bg-blue-100 text-blue-950",
-  };
-  return (
-    <td className="px-3 py-4">
-      <ul
-        className={`max-w-56 list-disc space-y-1 rounded-lg p-3 pl-6 text-xs ${styles[tone]}`}
-      >
-        {text.slice(0, 2).map((item) => (
-          <li key={item}>{item}</li>
-        ))}
-      </ul>
-    </td>
-  );
-}
-
-function BrokerBadge({ call }: { call: BrokerCall }) {
-  const styles: Record<BrokerCall, string> = {
-    "INQUIRE + NDA": "bg-emerald-700 text-white",
-    "NEED MORE": "bg-amber-400 text-stone-950",
-    PASS: "bg-stone-900 text-white",
-  };
-  return (
-    <span
-      className={`inline-flex whitespace-nowrap rounded-full px-3 py-1 text-xs font-semibold ${styles[call]}`}
-    >
-      {call}
-    </span>
   );
 }

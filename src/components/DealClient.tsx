@@ -18,6 +18,7 @@ import { DealHeader } from "@/components/DealHeader";
 import { DealDocuments } from "@/components/DealDocuments";
 import { DealScanFunnel } from "@/components/DealScanFunnel";
 import { companyScan, hasRealOwnerQa } from "@/lib/company-scan";
+import { looksLikeOcrDump } from "@/lib/copy";
 import {
   icHeadlineScore,
   icPillarContribution,
@@ -248,7 +249,12 @@ export function DealClient({ id }: { id: string }) {
               </p>
               <ol className="mt-4 space-y-2">
                 {s.questions
-                  .filter((question) => !/^unanswered\b/i.test(question.answer))
+                  .filter(
+                    (question) =>
+                      question.answer.trim() &&
+                      !/^unanswered\b/i.test(question.answer) &&
+                      !looksLikeOcrDump(question.answer)
+                  )
                   .map((question) => (
                     <li key={question.id} className="border-b border-[var(--line)] pb-3">
                       <button
@@ -259,7 +265,7 @@ export function DealClient({ id }: { id: string }) {
                           <span className="text-[var(--muted)]">{question.id}.</span>{" "}
                           {question.title}
                           <div className="mt-1 text-sm">
-                            {question.answer.slice(0, openQ === question.id ? 4000 : 180)}
+                            {question.answer.slice(0, openQ === question.id ? 400 : 180)}
                             {openQ === question.id || question.answer.length < 180 ? "" : "…"}
                           </div>
                         </span>

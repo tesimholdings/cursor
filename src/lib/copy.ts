@@ -83,9 +83,13 @@ export function looksLikeOcrDump(text?: string | null) {
   const compact = text.replace(/\s+/g, " ").trim();
   if (!compact) return false;
   if (/(?:[A-Z]\s){3,}[A-Z]/.test(compact)) return true;
-  if (/confidentialinformation|confidentialuniquecoat|trailing3-year|sectioniexecutive/i.test(
-    compact.replace(/\s+/g, "")
-  )) return true;
+  if (
+    /confidentialinformation|informationmemorandum|offeringmemorandum|confidentialuniquecoat|trailing3-year|sectioniexecutive/i.test(
+      compact.replace(/\s+/g, "")
+    )
+  ) {
+    return true;
+  }
   if (/C O N F I D E N T I A L|T R A I L I N G|I N F O R M A T I O N/.test(compact)) {
     return true;
   }

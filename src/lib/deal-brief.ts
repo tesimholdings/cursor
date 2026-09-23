@@ -1,4 +1,5 @@
 import { classifyDeal } from "./classification";
+import { isDumpDocument } from "./cim-drive";
 import { firstSentences, looksLikeOcrDump, stripLeadingName, unanswered } from "./copy";
 import { cimProse, hasReadableCim } from "./deal-picture";
 import { money } from "./format";
@@ -29,8 +30,9 @@ function cleanExcerpt(value: string | undefined, max = 180) {
 }
 
 function companyEvidence(deal: Deal) {
-  const note = cleanExcerpt(deal.notes);
+  const note = looksLikeOcrDump(deal.notes) ? "" : cleanExcerpt(deal.notes);
   const document = [...deal.documents]
+    .filter((item) => !isDumpDocument(item))
     .filter(
       (item) =>
         item.textExcerpt ||
@@ -129,7 +131,7 @@ export function companyHighlights(deal: Deal): CompanyHighlights {
         : unanswered(
             `${label} company-specific excerpt beyond the listing row`
           ),
-    publicSource?.excerpt
+    publicSource?.excerpt && !looksLikeOcrDump(publicSource.excerpt)
       ? `Public excerpt: “${cleanExcerpt(publicSource.excerpt)}”`
       : "",
     deal.realEstateIncluded === true
@@ -194,9 +196,10 @@ export function conciseDealQuestions(deal: Deal): ConciseQuestionAnswer[] {
   if (publicSource) {
     questions.push({
       question: "What did public research add?",
-      answer: publicSource.excerpt
-        ? `Public supplement “${publicSource.title}”: “${cleanExcerpt(publicSource.excerpt)}”`
-        : `Public source “${publicSource.title}” has no usable excerpt.`,
+      answer:
+        publicSource.excerpt && !looksLikeOcrDump(publicSource.excerpt)
+          ? `Public supplement “${publicSource.title}”: “${cleanExcerpt(publicSource.excerpt)}”`
+          : `Public source “${publicSource.title}” has no usable excerpt.`,
       kind: "EXTERNAL_RESEARCH",
       unknown: unanswered("any claim not in the fetched excerpt"),
       next: "Use the cited source only.",
